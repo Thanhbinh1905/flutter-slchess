@@ -1,0 +1,15 @@
+import "package:chess/chess.dart";
+
+void main() {
+  Chess chess = Chess();
+  while (!chess.game_over) {
+    print('position: ${chess.fen}');
+    print(chess.ascii);
+    var moves = chess.moves();
+    print('legal moves: $moves');
+    moves.shuffle();
+    var move = moves[0];
+    chess.move(move);
+    print('move: ' + move);
+  }
+}
