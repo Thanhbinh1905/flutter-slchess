@@ -3,6 +3,8 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'core/screens/login.dart';
 import 'core/screens/homescreen.dart';
 import 'core/screens/chessboard.dart';
+import 'core/screens/offline_game.dart';
+import 'core/models/game.dart';
 
 final navigatorKey = GlobalKey<NavigatorState>();
 
@@ -26,11 +28,25 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       navigatorKey: navigatorKey,
       debugShowCheckedModeBanner: false,
-      initialRoute: '/board',
-      routes: {
-        '/login': (context) => const LoginScreen(),
-        '/home': (context) => const HomeScreen(),
-        '/board': (context) => const Chessboard()
+      initialRoute: '/offline_game',
+      onGenerateRoute: (settings) {
+        switch (settings.name) {
+          case '/board':
+            final game = settings.arguments as Game; // Nhận đối số
+            return MaterialPageRoute(
+              builder: (context) =>
+                  Chessboard(game: game), // Truyền vào Chessboard
+            );
+          case '/login':
+            return MaterialPageRoute(builder: (context) => const LoginScreen());
+          case '/home':
+            return MaterialPageRoute(builder: (context) => const HomeScreen());
+          case '/offline_game':
+            return MaterialPageRoute(
+                builder: (context) => const OfflineGameScreen());
+          default:
+            return MaterialPageRoute(builder: (context) => const HomeScreen());
+        }
       },
     );
   }

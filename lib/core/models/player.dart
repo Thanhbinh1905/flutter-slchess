@@ -1,18 +1,16 @@
 enum Status { CONNECTED, DISCONNECTED }
 
 class Player {
-  final String id;
-  final String avatar;
-  final String email;
+  final String username;
+  final List ratingChanges;
   int rating;
   int wins;
   int losses;
   int draws;
 
   Player({
-    required this.id,
-    required this.avatar,
-    required this.email,
+    required this.ratingChanges,
+    required this.username,
     this.rating = 1200,
     this.wins = 0,
     this.losses = 0,
@@ -21,9 +19,8 @@ class Player {
 
   factory Player.fromJson(Map<String, dynamic> json) {
     return Player(
-      id: json['id'],
-      avatar: json['avatar'],
-      email: json['email'],
+      ratingChanges: json['ratingChanges'] ?? [],
+      username: json['username'],
       rating: json['rating'] ?? 1200,
       wins: json['wins'] ?? 0,
       losses: json['losses'] ?? 0,
@@ -33,9 +30,7 @@ class Player {
 
   Map<String, dynamic> toJson() {
     return {
-      'id': id,
-      'avatar': avatar,
-      'email': email,
+      'username': username,
       'rating': rating,
       'wins': wins,
       'losses': losses,

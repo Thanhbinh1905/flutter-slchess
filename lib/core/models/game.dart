@@ -9,6 +9,8 @@ class Game {
   final Player whitePlayer;
   final Player blackPlayer;
   final DateTime startTime;
+  final String timeControl;
+  final bool isOnline;
   DateTime? endTime;
   GameStatus status;
   String? winner;
@@ -19,6 +21,8 @@ class Game {
     required this.whitePlayer,
     required this.blackPlayer,
     required this.startTime,
+    required this.isOnline,
+    required this.timeControl,
     this.endTime,
     this.status = GameStatus.active,
     this.winner,
@@ -30,6 +34,8 @@ class Game {
       id: json['id'],
       whitePlayer: Player.fromJson(json['whitePlayer']),
       blackPlayer: Player.fromJson(json['blackPlayer']),
+      isOnline: json['isOnline'] ?? false,
+      timeControl: json['timeControl'] ?? '',
       startTime: DateTime.parse(json['startTime']),
       endTime: json['endTime'] != null ? DateTime.parse(json['endTime']) : null,
       status: GameStatus.values.byName(json['status']),
