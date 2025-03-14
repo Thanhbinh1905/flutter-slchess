@@ -26,7 +26,7 @@ class _PlayPageState extends State<PlayPage> {
             ),
             ElevatedButton.icon(
               onPressed: () {
-                // TODO: Xử lý khi nhấn nút play
+                Navigator.pushNamed(context, '/offline_game');
               },
               icon: const Icon(Icons.play_arrow),
               label: const Text('Play Offline'),

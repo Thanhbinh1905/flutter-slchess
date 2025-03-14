@@ -27,7 +27,7 @@ class _ChessboardState extends State<Chessboard> {
   late String fen;
 
   late String timeControl; // Khai báo biến timeControl
-  late String timeIncrement; // Khai báo biến timeControl
+  late int timeIncrement; // Khai báo biến timeControl
 
   late int whiteTime; // Thời gian còn lại cho bên trắng
 
@@ -49,6 +49,8 @@ class _ChessboardState extends State<Chessboard> {
 
   late ScrollController _scrollController; // Thêm ScrollController
 
+  late bool isOnline;
+
   bool isPaused = false; // Biến để theo dõi trạng thái tạm dừng
 
   @override
@@ -60,9 +62,9 @@ class _ChessboardState extends State<Chessboard> {
     _scrollController = ScrollController(); // Khởi tạo ScrollController
 
     _scrollToBottomAfterBuild();
-
+    isOnline = widget.game.isOnline;
     timeControl = widget.game.timeControl.split("+")[0];
-    timeIncrement = widget.game.timeControl.split("+")[1];
+    timeIncrement = int.parse(widget.game.timeControl.split("+")[1]);
 
     whiteTime = int.parse(timeControl) * 60 * 1000;
 
@@ -172,7 +174,6 @@ class _ChessboardState extends State<Chessboard> {
           },
         ),
       ),
-
       body: Column(
         children: [
           gameHistory(game),
@@ -186,6 +187,7 @@ class _ChessboardState extends State<Chessboard> {
             child: AspectRatio(
               aspectRatio: 1,
               child: GridView.builder(
+                physics: const NeverScrollableScrollPhysics(),
                 gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: 8,
                   childAspectRatio: 1.0,
@@ -257,6 +259,14 @@ class _ChessboardState extends State<Chessboard> {
                             listFen.add(fen); // Lưu FEN vào listFen
 
                             board = parseFEN(fen); // Cập nhật bàn cờ
+
+                            if (isWhiteTurn) {
+                              whiteTime += timeIncrement *
+                                  1000; // Cộng thời gian cho bên trắng
+                            } else {
+                              blackTime += timeIncrement *
+                                  1000; // Cộng thời gian cho bên đen
+                            }
 
                             _scrollToBottomAfterBuild();
 
@@ -339,73 +349,89 @@ class _ChessboardState extends State<Chessboard> {
       // Thêm footer với các tùy chọn
 
       bottomNavigationBar: BottomAppBar(
+        color: const Color(0xFF282F33),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
-            TextButton(
-              onPressed: () {
-                _showOptionsMenu(context);
-              },
-              child: const Text("Tùy chọn"),
+            Expanded(
+              child: _bottomAppBarBtn(
+                "Tùy chọn",
+                () {
+                  _showOptionsMenu(context);
+                },
+                icon: Icons.storage,
+              ),
             ),
-            TextButton(
-              onPressed: () {
-                // Tạm dừng hoặc tiếp tục bộ đếm thời gian
-
-                setState(() {
-                  if (isPaused) {
-                    _stopwatch.start(); // Tiếp tục bộ đếm
-                  } else {
-                    _stopwatch.stop(); // Tạm dừng bộ đếm
+            if (!isOnline)
+              Expanded(
+                child: _bottomAppBarBtn(
+                  isPaused ? "Tiếp tục" : "Tạm dừng",
+                  () {
+                    setState(() {
+                      if (isPaused) {
+                        _stopwatch.start();
+                      } else {
+                        _stopwatch.stop();
+                      }
+                      isPaused = !isPaused;
+                    });
+                  },
+                  icon: isPaused ? Icons.play_arrow : Icons.pause,
+                ),
+              ),
+            Expanded(
+              child: _bottomAppBarBtn(
+                "Quay lại",
+                () {
+                  if (listFen.length > 1) {
+                    setState(() {
+                      if (halfmove > 0) {
+                        halfmove--;
+                      }
+                      fen = listFen[halfmove];
+                      board = parseFEN(fen);
+                      scrollToIndex(halfmove);
+                    });
                   }
-
-                  isPaused = !isPaused; // Đảo ngược trạng thái
-                });
-              },
-
-              child: Text(
-                  isPaused ? "Tiếp tục" : "Tạm dừng"), // Thay đổi văn bản nút
+                },
+                icon: Icons.arrow_back_ios_new,
+              ),
             ),
-            TextButton(
-              onPressed: () {
-                // Quay lại nước đi trước
-
-                if (listFen.length > 1) {
-                  setState(() {
-                    if (halfmove > 0) {
-                      halfmove--;
-                    }
-
-                    fen = listFen[halfmove]; // Lấy trạng thái trước đó
-
-                    board = parseFEN(fen); // Cập nhật bàn cờ
-                  });
-                }
-              },
-              child: const Text("Quay lại"),
-            ),
-            TextButton(
-              onPressed: () {
-                // Tiếp tục nước đi tiếp theo
-
-                if (listFen.length > 1) {
-                  setState(() {
-                    if (halfmove < listFen.length - 1) {
-                      halfmove++;
-                    }
-
-                    fen = listFen[halfmove]; // Lấy trạng thái tiếp theo
-
-                    board = parseFEN(fen); // Cập nhật bàn cờ
-                  });
-                }
-              },
-              child: const Text("Tiếp"),
+            Expanded(
+              child: _bottomAppBarBtn(
+                "Tiếp",
+                () {
+                  if (listFen.length > 1) {
+                    setState(() {
+                      if (halfmove < listFen.length - 1) {
+                        halfmove++;
+                      }
+                      fen = listFen[halfmove];
+                      board = parseFEN(fen);
+                      scrollToIndex(halfmove);
+                    });
+                  }
+                },
+                icon: Icons.arrow_forward_ios,
+              ),
             ),
           ],
         ),
       ),
     );
+  }
+
+  void scrollToIndex(int index) {
+    // Kiểm tra xem chỉ số có hợp lệ không
+    if (index >= 0 && index < listFen.length) {
+      // Tính toán vị trí cuộn
+      double position = index * 50.0; // Giả sử mỗi item có chiều cao 50.0
+      _scrollController.animateTo(
+        position,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.linearToEaseOut,
+      );
+    }
   }
 
   String formatTime(int milliseconds) {
@@ -433,6 +459,7 @@ class _ChessboardState extends State<Chessboard> {
 
     if (moves.isEmpty) {
       return Container(
+        color: const Color(0xFF0E1416),
         alignment: Alignment.centerLeft,
         padding: const EdgeInsets.symmetric(horizontal: 10),
         child: const Text(" "),
@@ -459,12 +486,12 @@ class _ChessboardState extends State<Chessboard> {
                     }, // Gọi hàm khi nhấn vào nước đầu tiên
 
                 child: Row(children: [
-                  Text("$moveNumber "),
+                  Text(
+                    moveNumber,
+                    style: const TextStyle(color: Colors.white),
+                  ),
                   moveSelect(index * 2 + 1, firstMove),
                 ])),
-
-            const SizedBox(width: 8), // Khoảng cách giữa các nước đi
-
             if (index * 2 + 1 <
                 moves.length) // Kiểm tra nước thứ hai có tồn tại không
 
@@ -473,8 +500,7 @@ class _ChessboardState extends State<Chessboard> {
                       index * 2 + 1), // Gọi hàm khi nhấn vào nước thứ hai
 
                   child: moveSelect(index * 2 + 1 + 1, secondMove)),
-
-            const SizedBox(width: 8), // Khoảng cách giữa các nước đi
+            const SizedBox(width: 4),
           ],
         );
       },
@@ -489,7 +515,8 @@ class _ChessboardState extends State<Chessboard> {
 
         child: Row(
           children: [
-            Text("${(moves.length / 2).ceil()}. "),
+            Text("${(moves.length / 2).ceil()}. ",
+                style: const TextStyle(color: Colors.white)),
             moveSelect((moves.length).ceil(), moves.last)
           ],
         ),
@@ -501,11 +528,8 @@ class _ChessboardState extends State<Chessboard> {
       controller: _scrollController,
       child: Container(
         color: const Color(0xFF0E1416),
-        alignment: Alignment.centerLeft,
-        padding: const EdgeInsets.symmetric(horizontal: 10),
+        // padding: const EdgeInsets.symmetric(vertical: 1),
         child: Row(
-          mainAxisAlignment: MainAxisAlignment.start,
-          crossAxisAlignment: CrossAxisAlignment.center,
           children: formattedMoves,
         ),
       ),
@@ -514,13 +538,23 @@ class _ChessboardState extends State<Chessboard> {
 
   Widget moveSelect(int index, String text) {
     return Container(
-      color: halfmove == index ? Colors.grey : Colors.white,
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      decoration: BoxDecoration(
+        borderRadius: const BorderRadius.only(
+          topLeft: Radius.circular(6), // Góc trên bên trái
+          topRight: Radius.circular(6), // Góc trên bên phải
+          bottomLeft: Radius.circular(2), // Góc trên bên trái
+          bottomRight: Radius.circular(2), // Góc trên bên phải
+        ),
+        color: halfmove == index ? Colors.grey : null,
+      ),
+      // color: halfmove == index ? Colors.grey : null,
       child: Text(
         text,
         style: TextStyle(
           color: halfmove == index
-              ? Colors.white
-              : const Color(0xFF282F33), // Thay đổi màu sắc nếu được chọn
+              ? const Color(0xFF282F33)
+              : Colors.white, // Thay đổi màu sắc nếu được chọn
 
           fontWeight: halfmove == index ? FontWeight.bold : FontWeight.normal,
         ),
@@ -946,6 +980,35 @@ class _ChessboardState extends State<Chessboard> {
       leading: Icon(icon, size: 28),
       title: Text(text, style: const TextStyle(fontSize: 16)),
       onTap: onTap,
+    );
+  }
+
+  Widget _bottomAppBarBtn(String text, VoidCallback onPressed,
+      {IconData? icon}) {
+    return InkWell(
+      onTap: onPressed, // Gọi trực tiếp hàm được truyền vào
+      child: Container(
+        decoration: BoxDecoration(borderRadius: BorderRadius.circular(8)),
+        // padding:
+        //     const EdgeInsets.symmetric(vertical: 5), // Thêm padding cho nút
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            if (icon != null)
+              Icon(
+                icon,
+                color: Colors.white,
+                size: 20,
+              ), // Hiển thị icon nếu có
+            const SizedBox(width: 8), // Khoảng cách giữa icon và text
+            Text(
+              text,
+              style: const TextStyle(
+                  color: Colors.white, fontSize: 11), // Đặt màu chữ
+            ),
+          ],
+        ),
+      ),
     );
   }
 

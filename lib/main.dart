@@ -4,6 +4,7 @@ import 'core/screens/login.dart';
 import 'core/screens/homescreen.dart';
 import 'core/screens/chessboard.dart';
 import 'core/screens/offline_game.dart';
+import 'core/screens/play.dart';
 import 'core/models/game.dart';
 
 final navigatorKey = GlobalKey<NavigatorState>();
@@ -32,18 +33,17 @@ class MyApp extends StatelessWidget {
       onGenerateRoute: (settings) {
         switch (settings.name) {
           case '/board':
-            final game = settings.arguments as Game; // Nhận đối số
+            final game = settings.arguments as Game;
             return MaterialPageRoute(
-              builder: (context) =>
-                  Chessboard(game: game), // Truyền vào Chessboard
+              builder: (context) => Chessboard(game: game),
             );
           case '/login':
             return MaterialPageRoute(builder: (context) => const LoginScreen());
-          case '/home':
-            return MaterialPageRoute(builder: (context) => const HomeScreen());
           case '/offline_game':
             return MaterialPageRoute(
                 builder: (context) => const OfflineGameScreen());
+          case '/home':
+            return MaterialPageRoute(builder: (context) => const HomeScreen());
           default:
             return MaterialPageRoute(builder: (context) => const HomeScreen());
         }

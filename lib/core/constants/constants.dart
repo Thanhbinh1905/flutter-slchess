@@ -1,14 +1,15 @@
 class ApiConstants {
   String matchMaking =
-      "https://gmkncwi060.execute-api.ap-southeast-2.amazonaws.com/dev/matchmaking";
+      "https://ns4denwt57.execute-api.ap-southeast-2.amazonaws.com/dev/matchmaking";
 }
 
 class WebsocketConstants {
-  String endpoint = "localhost:7202";
+  String serverEndpoint = "localhost:7202";
 
   String queueing =
-      "wss://3wp0amcali.execute-api.ap-southeast-2.amazonaws.com/dev";
-  String get game => "ws://$endpoint/game/15ae24ed-c1e0-406f-a59d-d7e48a856943";
+      "wss://y0g2gcbj5i.execute-api.ap-southeast-2.amazonaws.com/dev";
+  String get game =>
+      "ws://$serverEndpoint/game/15ae24ed-c1e0-406f-a59d-d7e48a856943";
 }
 
 List<Map<String, String>> timeControls = [
