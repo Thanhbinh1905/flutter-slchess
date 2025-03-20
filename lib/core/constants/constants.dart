@@ -1,15 +1,17 @@
 class ApiConstants {
-  String matchMaking =
-      "https://ns4denwt57.execute-api.ap-southeast-2.amazonaws.com/dev/matchmaking";
+  static const String matchMaking =
+      "https://https://itldlavjhe.execute-api.ap-southeast-2.amazonaws.com/dev/matchmaking";
+
+  static const String getUserInfo =
+      "https://itldlavjhe.execute-api.ap-southeast-2.amazonaws.com/dev/user";
 }
 
 class WebsocketConstants {
-  String serverEndpoint = "localhost:7202";
+  static const String serverEndpoint = "localhost:7202";
 
-  String queueing =
-      "wss://y0g2gcbj5i.execute-api.ap-southeast-2.amazonaws.com/dev";
-  String get game =>
-      "ws://$serverEndpoint/game/15ae24ed-c1e0-406f-a59d-d7e48a856943";
+  static const String queueing =
+      "wss://b2hg1vxn3a.execute-api.ap-southeast-2.amazonaws.com/dev";
+  static String get game => "ws://$serverEndpoint/game/";
 }
 
 List<Map<String, String>> timeControls = [

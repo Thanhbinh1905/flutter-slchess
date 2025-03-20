@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../constants/constants.dart'; // Đảm bảo import constants
 
 class PlayPage extends StatefulWidget {
   const PlayPage({super.key});
@@ -8,6 +9,8 @@ class PlayPage extends StatefulWidget {
 }
 
 class _PlayPageState extends State<PlayPage> {
+  String? selectedTimeControl; // Biến để lưu trữ giá trị đã chọn
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -17,9 +20,29 @@ class _PlayPageState extends State<PlayPage> {
           children: [
             const Text('Play Screen', style: TextStyle(fontSize: 24)),
             const SizedBox(height: 20),
+            DropdownButton<String>(
+              hint: const Text('Chọn thời gian chơi'),
+              value: selectedTimeControl,
+              onChanged: (String? newValue) {
+                setState(() {
+                  selectedTimeControl = newValue;
+                });
+
+                print(selectedTimeControl);
+              },
+              items: timeControls
+                  .map<DropdownMenuItem<String>>((Map<String, String> control) {
+                return DropdownMenuItem<String>(
+                  value: control['value'],
+                  child: Text(control['key']!),
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 20),
             ElevatedButton.icon(
               onPressed: () {
                 // TODO: Xử lý khi nhấn nút play
+                print("Selected Time Control: $selectedTimeControl");
               },
               icon: const Icon(Icons.play_arrow),
               label: const Text('Play Now'),

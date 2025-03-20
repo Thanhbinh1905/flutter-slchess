@@ -4,7 +4,8 @@ import 'core/screens/login.dart';
 import 'core/screens/homescreen.dart';
 import 'core/screens/chessboard.dart';
 import 'core/screens/offline_game.dart';
-import 'core/screens/play.dart';
+import 'core/screens/matchmaking.dart';
+
 import 'core/models/game.dart';
 
 final navigatorKey = GlobalKey<NavigatorState>();
@@ -29,7 +30,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       navigatorKey: navigatorKey,
       debugShowCheckedModeBanner: false,
-      initialRoute: '/offline_game',
+      initialRoute: '/matchmaking',
       onGenerateRoute: (settings) {
         switch (settings.name) {
           case '/board':
@@ -44,6 +45,9 @@ class MyApp extends StatelessWidget {
                 builder: (context) => const OfflineGameScreen());
           case '/home':
             return MaterialPageRoute(builder: (context) => const HomeScreen());
+          case '/matchmaking':
+            return MaterialPageRoute(
+                builder: (context) => const MatchMakingScreen());
           default:
             return MaterialPageRoute(builder: (context) => const HomeScreen());
         }
