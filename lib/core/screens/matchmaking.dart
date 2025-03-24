@@ -1,14 +1,46 @@
 import 'package:flutter/material.dart';
+import '../services/matchMaking.dart';
+import '../services/cognito_auth.dart';
+import '../services/userService.dart';
+import '../models/user.dart';
 
 class MatchMakingScreen extends StatefulWidget {
-  const MatchMakingScreen({super.key});
+  final String gameMode;
+  const MatchMakingScreen({super.key, required this.gameMode});
 
   @override
   State<MatchMakingScreen> createState() => _MatchMakingScreenState();
 }
 
 class _MatchMakingScreenState extends State<MatchMakingScreen> {
+  late String gameMode;
   bool isQueued = false;
+
+  MatchMakingSerice matchMakingSerice = MatchMakingSerice();
+  CognitoAuth cognitoAuth = CognitoAuth();
+  UserService userService = UserService();
+
+  late String? storedIdToken;
+
+  late UserModel? player;
+
+  // print("player: ${player!.toJson()}");
+
+  @override
+  void initState() {
+    super.initState();
+    gameMode = widget.gameMode;
+    _initializeMatchmaking();
+  }
+
+  Future<void> _initializeMatchmaking() async {
+    storedIdToken = await cognitoAuth.getStoredIdToken();
+    player = await userService.getPlayer();
+
+    final double playerRating = player!.rating;
+    // Giả sử bạn có các biến idToken và rating đã được định nghĩa
+    matchMakingSerice.getQueue(storedIdToken!, gameMode, playerRating);
+  }
 
   @override
   Widget build(BuildContext context) {

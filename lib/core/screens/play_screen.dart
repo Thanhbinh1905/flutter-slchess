@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../constants/constants.dart'; // Đảm bảo import constants
+import '../services/matchMaking.dart';
 
 class PlayPage extends StatefulWidget {
   const PlayPage({super.key});
@@ -29,6 +30,7 @@ class _PlayPageState extends State<PlayPage> {
                 });
 
                 print(selectedTimeControl);
+                // MatchMakingSerice().getQueue(idToken, gameMode, rating);
               },
               items: timeControls
                   .map<DropdownMenuItem<String>>((Map<String, String> control) {
@@ -42,7 +44,15 @@ class _PlayPageState extends State<PlayPage> {
             ElevatedButton.icon(
               onPressed: () {
                 // TODO: Xử lý khi nhấn nút play
-                print("Selected Time Control: $selectedTimeControl");
+                if (selectedTimeControl == null ||
+                    selectedTimeControl!.isEmpty) {
+                  print("isEmpty!");
+                  return;
+                }
+                print("Started queue: $selectedTimeControl");
+
+                Navigator.pushNamed(context, '/matchmaking',
+                    arguments: selectedTimeControl);
               },
               icon: const Icon(Icons.play_arrow),
               label: const Text('Play Now'),

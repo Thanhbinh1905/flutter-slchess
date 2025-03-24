@@ -30,7 +30,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       navigatorKey: navigatorKey,
       debugShowCheckedModeBanner: false,
-      initialRoute: '/matchmaking',
+      initialRoute: '/login',
       onGenerateRoute: (settings) {
         switch (settings.name) {
           case '/board':
@@ -46,8 +46,9 @@ class MyApp extends StatelessWidget {
           case '/home':
             return MaterialPageRoute(builder: (context) => const HomeScreen());
           case '/matchmaking':
+            final gameMode = settings.arguments as String;
             return MaterialPageRoute(
-                builder: (context) => const MatchMakingScreen());
+                builder: (context) => MatchMakingScreen(gameMode: gameMode));
           default:
             return MaterialPageRoute(builder: (context) => const HomeScreen());
         }

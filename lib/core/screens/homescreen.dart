@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/cognito_auth.dart';
-import 'play.dart';
+import 'play_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});

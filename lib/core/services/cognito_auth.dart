@@ -5,11 +5,16 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import '../../main.dart'; // Thêm dòng này để import navigatorKey
+import 'package:shared_preferences/shared_preferences.dart';
+import '../../main.dart';
+import './userService.dart';
+
+import '../models/user.dart';
 
 class CognitoAuth {
   late AppLinks _appLinks;
   final storage = const FlutterSecureStorage();
+  final userService = UserService();
 
   final cognitoUrl = dotenv.env['COGNITO_URL'];
   final cognitoClientId = dotenv.env['COGNITO_CLIENT_ID'];
@@ -18,6 +23,9 @@ class CognitoAuth {
   static const String ACCESS_TOKEN_KEY = "ACCESS_TOKEN";
   static const String ID_TOKEN_KEY = "ID_TOKEN";
   static const String REFRESH_TOKEN_KEY = "REFRESH_TOKEN";
+
+  // Thêm key để lưu thông tin người dùng
+  static const String USER_INFO_KEY = "USER_INFO";
 
   Future<void> initAppLinks() async {
     _appLinks = AppLinks();
@@ -97,7 +105,15 @@ class CognitoAuth {
               key: REFRESH_TOKEN_KEY, value: tokens['refresh_token']);
         }
 
-        print('Đã lưu token thành công');
+        // print('Đã lưu token thành công');
+
+        // Lấy và lưu thông tin người dùng
+        await userService.saveSelfUserInfo(
+            tokens['access_token'], tokens['id_token']);
+
+        // UserModel? player = await userService.getPlayer();
+
+        // print("player: ${player!.toJson()}");
 
         // Chuyển đến màn hình home
         navigateToHome();

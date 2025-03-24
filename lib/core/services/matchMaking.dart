@@ -5,8 +5,9 @@ import 'package:web_socket_channel/io.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert'; // Để sử dụng jsonEncode
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-class MatchMaking {
+class MatchMakingSerice {
   static final String _wsGameUrl = WebsocketConstants.game;
   static const String _wsQueueUrl = WebsocketConstants.queueing;
   static const String _matchMakingApiUrl = ApiConstants.matchMaking;
@@ -33,10 +34,7 @@ class MatchMaking {
     channel.sink.close();
   }
 
-  void connectToQueue(String idToken) {
-    // Điều hướng đến màn hình matchmaking
-    // Navigator.pushNamed(navigatorKey.currentContext!, '/matchmaking');
-
+  void connectToQueue(String idToken) async {
     final WebSocketChannel channel = IOWebSocketChannel.connect(
       Uri.parse(_wsQueueUrl),
       headers: {
@@ -47,9 +45,14 @@ class MatchMaking {
     channel.sink.add(jsonEncode({"action": "queueing"}));
 
     channel.stream.listen(
-      (message) {
+      (message) async {
         print("Received: $message");
-        // Xử lý thông điệp nhận được và điều hướng đến màn hình trò chơi nếu cần
+        final data = jsonDecode(message);
+
+        // Kiểm tra nếu message có chứa matchId (tức là trận đấu đã tìm thấy)
+        if (data.containsKey("matchId")) {
+          await saveMatchData(data);
+        }
       },
       onError: (error) {
         print("Error: $error");
@@ -60,11 +63,24 @@ class MatchMaking {
     );
   }
 
-  Future<void> getQueue(String idToken, String gameMode, int rating,
+  Future<void> saveMatchData(Map<String, dynamic> matchData) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('match', jsonEncode(matchData));
+    print("Match data saved!");
+  }
+
+  Future<Map<String, dynamic>?> getMatchData() async {
+    final prefs = await SharedPreferences.getInstance();
+    String? matchString = prefs.getString('match');
+    if (matchString == null) return null;
+    return jsonDecode(matchString);
+  }
+
+  Future<void> getQueue(String idToken, String gameMode, double rating,
       {int minRating = 0, int maxRating = 100}) async {
     // Cập nhật giá trị mặc định cho minRating và maxRating nếu cần
-    minRating = minRating == 0 ? rating - 50 : minRating;
-    maxRating = maxRating == 100 ? rating + 50 : maxRating;
+    minRating = minRating == 0 ? (rating - 50).toInt() : minRating;
+    maxRating = maxRating == 100 ? (rating + 50).toInt() : maxRating;
 
     try {
       final response = await http.post(
@@ -102,5 +118,5 @@ void main() {
       "eyJraWQiOiIwUG5IR3RNYWJGSFM1TkNvWkt1Vjd5UktnRUNpZkdPemVqdVJId2VGUkNRPSIsImFsZyI6IlJTMjU2In0.eyJhdF9oYXNoIjoiaUtsZG13azZFakJMdnYwZS1abDhHdyIsInN1YiI6IjY5ZWU3NGY4LTQwZjEtNzA3NC0yNGNmLTg2Zjg0MThiMDlmZCIsImVtYWlsX3ZlcmlmaWVkIjpmYWxzZSwiaXNzIjoiaHR0cHM6XC9cL2NvZ25pdG8taWRwLmFwLXNvdXRoZWFzdC0yLmFtYXpvbmF3cy5jb21cL2FwLXNvdXRoZWFzdC0yX0Z2aEQ1amc2diIsImNvZ25pdG86dXNlcm5hbWUiOiJ0ZXN0dXNlcjEiLCJvcmlnaW5fanRpIjoiMDk0ZDA3YzEtMDEyZS00OTk1LWExN2MtZDM3MjM1MTMzMzJiIiwiYXVkIjoiMjUxbGIwN25jYWU4YmpmOXBkZjlmaHJvZWQiLCJldmVudF9pZCI6ImEzNjhhYjM2LWU5ZWEtNDAzOS1hZWE0LWUxYzMzNTVlYzAxNCIsInRva2VuX3VzZSI6ImlkIiwiYXV0aF90aW1lIjoxNzQxOTQ0Mjc4LCJleHAiOjE3NDE5NDc4NzgsImlhdCI6MTc0MTk0NDI3OCwianRpIjoiNmRlNDEwYjUtMDg3Ni00OWVhLWJmYjctY2Q0OGU4M2I5YjZmIiwiZW1haWwiOiJ0ZXN0dXNlcjFAZ21haWwuY29tIn0.nZxQTYPOXrAB7-qZu4a9axgiicHQcKw1i1tu99MOFQeN9FjyLmfcMTLSXgFZ7iRFPRN9Kjfffq2fqBgfTn1t27um0bOAdGwCZToeBuUGLxuiere6-bD_Bo186-rQ8fqLdyGXIrBdHEeyrlJazRnfWDWk58IQBBlF0oCf4pbRwcwjRciZZYktmn6eDqcC83JYR1cN-v568B4bpb24UEYv1INIQamDLhZBDxiMH3bRIceFuttyjD4GlCwyYBtZPe4jfsa4hITW-zqNc2T4VtM72UFJL_R8yzRS48IH44Eh08JtLgft8Zo2rULQhS_7rBPB3ZGv2XUQbf4btWm00aUrPg"; // Thay thế bằng token thực tế
   // print("Token: $token"); // In ra token để kiểm tra
 
-  MatchMaking().getQueue(token, "10+0", 1200);
+  MatchMakingSerice().getQueue(token, "10+0", 1200);
 }
