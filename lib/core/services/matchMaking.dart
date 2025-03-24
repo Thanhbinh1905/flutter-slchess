@@ -34,7 +34,7 @@ class MatchMakingSerice {
     channel.sink.close();
   }
 
-  void connectToQueue(String idToken) async {
+  dynamic connectToQueue(String idToken) async {
     final WebSocketChannel channel = IOWebSocketChannel.connect(
       Uri.parse(_wsQueueUrl),
       headers: {
