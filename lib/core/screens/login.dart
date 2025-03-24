@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../services/cognito_auth.dart';
+import '../services/cognito_auth_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});

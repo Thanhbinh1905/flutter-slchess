@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../services/cognito_auth.dart';
+import '../services/cognito_auth_service.dart';
 import 'play_screen.dart';
 
 class HomeScreen extends StatefulWidget {

@@ -1,9 +1,9 @@
 class ApiConstants {
   static const String matchMaking =
-      "https://6699cwg1vh.execute-api.ap-southeast-2.amazonaws.com/dev/matchmaking";
+      "https://v0euas3k4m.execute-api.ap-southeast-2.amazonaws.com/dev/matchmaking";
 
   static const String getUserInfo =
-      "https://6699cwg1vh.execute-api.ap-southeast-2.amazonaws.com/dev/user";
+      "https://v0euas3k4m.execute-api.ap-southeast-2.amazonaws.com/dev/user";
 
   static const String getSelfUserInfoUrl =
       "https://slchess-dev.auth.ap-southeast-2.amazoncognito.com/oauth2/userInfo";
@@ -13,7 +13,7 @@ class WebsocketConstants {
   static const String serverEndpoint = "localhost:7202";
 
   static const String queueing =
-      "wss://jjpaj0d8ah.execute-api.ap-southeast-2.amazonaws.com/dev";
+      "wss://5e5zo5upg2.execute-api.ap-southeast-2.amazonaws.com/dev";
   static String get game => "ws://$serverEndpoint/game/";
 }
 

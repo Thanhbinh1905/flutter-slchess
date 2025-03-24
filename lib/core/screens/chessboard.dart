@@ -1,15 +1,17 @@
+import 'dart:ffi';
+
 import 'package:flutter/material.dart';
 
 import 'package:chess/chess.dart' as chess;
-
-import '../models/game.dart';
+import 'package:flutter_slchess/core/models/match.dart';
 
 import 'dart:async'; // Thêm import này
 
 class Chessboard extends StatefulWidget {
-  final Game game;
+  // final Game game;
+  final MatchModel match;
 
-  const Chessboard({super.key, required this.game});
+  const Chessboard({super.key, required this.match});
 
   @override
   State<Chessboard> createState() => _ChessboardState();
@@ -62,9 +64,9 @@ class _ChessboardState extends State<Chessboard> {
     _scrollController = ScrollController(); // Khởi tạo ScrollController
 
     _scrollToBottomAfterBuild();
-    isOnline = widget.game.isOnline;
-    timeControl = widget.game.timeControl.split("+")[0];
-    timeIncrement = int.parse(widget.game.timeControl.split("+")[1]);
+    isOnline = widget.match.isOnline;
+    timeControl = widget.match.gameMode.split("+")[0];
+    timeIncrement = int.parse(widget.match.gameMode.split("+")[1]);
 
     whiteTime = int.parse(timeControl) * 60 * 1000;
 
@@ -179,7 +181,7 @@ class _ChessboardState extends State<Chessboard> {
           gameHistory(game),
 
           playerWidget(
-              playerName: widget.game.blackPlayer.username,
+              playerName: widget.match.player2.id,
               timeRemaining: formatTime(
                   blackTime)), // Hiển thị thời gian còn lại cho bên đen
 
@@ -340,7 +342,7 @@ class _ChessboardState extends State<Chessboard> {
           ),
 
           playerWidget(
-              playerName: widget.game.whitePlayer.username,
+              playerName: widget.match.player2.id,
               timeRemaining: formatTime(
                   whiteTime)), // Hiển thị thời gian còn lại cho bên trắng
         ],

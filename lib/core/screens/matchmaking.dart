@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
-import '../services/matchMaking.dart';
-import '../services/cognito_auth.dart';
+import '../services/matchmaking_service.dart';
+import '../services/cognito_auth_service.dart';
 import '../services/userService.dart';
 import '../models/user.dart';
+import '../models/match.dart';
 
 class MatchMakingScreen extends StatefulWidget {
   final String gameMode;
@@ -24,6 +25,8 @@ class _MatchMakingScreenState extends State<MatchMakingScreen> {
 
   late UserModel? player;
 
+  late MatchModel? match;
+
   // print("player: ${player!.toJson()}");
 
   @override
@@ -39,7 +42,13 @@ class _MatchMakingScreenState extends State<MatchMakingScreen> {
 
     final double playerRating = player!.rating;
     // Giả sử bạn có các biến idToken và rating đã được định nghĩa
-    matchMakingSerice.getQueue(storedIdToken!, gameMode, playerRating);
+    match = await matchMakingSerice.getQueue(
+        storedIdToken!, gameMode, playerRating);
+    if (match != null) {
+      setState(() {
+        isQueued = true;
+      });
+    }
   }
 
   @override
@@ -121,7 +130,11 @@ class _MatchMakingScreenState extends State<MatchMakingScreen> {
                     isQueued ? "Queued" : "Queueing.....",
                   ),
                   const SizedBox(height: 20),
-                  ElevatedButton(onPressed: () {}, child: const Text("Cancel")),
+                  ElevatedButton(
+                      onPressed: () {
+                        Navigator.pop(context); // Quay lại trang trước
+                      },
+                      child: const Text("Quay lại")),
                 ],
               ),
             ),

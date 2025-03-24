@@ -4,8 +4,10 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:web_socket_channel/io.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert'; // Để sử dụng jsonEncode
-import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import './matchService.dart';
+import '../models/match.dart';
 
 class MatchMakingSerice {
   static final String _wsGameUrl = WebsocketConstants.game;
@@ -34,7 +36,7 @@ class MatchMakingSerice {
     channel.sink.close();
   }
 
-  dynamic connectToQueue(String idToken) async {
+  Future<MatchModel?> connectToQueue(String idToken) async {
     final WebSocketChannel channel = IOWebSocketChannel.connect(
       Uri.parse(_wsQueueUrl),
       headers: {
@@ -44,14 +46,13 @@ class MatchMakingSerice {
 
     channel.sink.add(jsonEncode({"action": "queueing"}));
 
-    channel.stream.listen(
-      (message) async {
-        print("Received: $message");
-        final data = jsonDecode(message);
+    MatchModel? matchData;
 
-        // Kiểm tra nếu message có chứa matchId (tức là trận đấu đã tìm thấy)
+    channel.stream.listen(
+      (message) {
+        final data = jsonDecode(message);
         if (data.containsKey("matchId")) {
-          await saveMatchData(data);
+          matchData = handleQueued(message);
         }
       },
       onError: (error) {
@@ -61,22 +62,10 @@ class MatchMakingSerice {
         print("Connection closed");
       },
     );
+    return matchData;
   }
 
-  Future<void> saveMatchData(Map<String, dynamic> matchData) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('match', jsonEncode(matchData));
-    print("Match data saved!");
-  }
-
-  Future<Map<String, dynamic>?> getMatchData() async {
-    final prefs = await SharedPreferences.getInstance();
-    String? matchString = prefs.getString('match');
-    if (matchString == null) return null;
-    return jsonDecode(matchString);
-  }
-
-  Future<void> getQueue(String idToken, String gameMode, double rating,
+  Future<MatchModel?> getQueue(String idToken, String gameMode, double rating,
       {int minRating = 0, int maxRating = 100}) async {
     // Cập nhật giá trị mặc định cho minRating và maxRating nếu cần
     minRating = minRating == 0 ? (rating - 50).toInt() : minRating;
@@ -99,8 +88,11 @@ class MatchMakingSerice {
 
       if (response.statusCode == 200) {
         print('Queue retrieved successfully!');
-        var data = jsonDecode(response.body);
-        print(data);
+
+        // MatchModel data = MatchService().getMatchFromJson(response.body);
+        // print(data.toJson());
+
+        return handleQueued(response.body);
       } else if (response.statusCode == 202) {
         print('Queue creation in progress...');
         connectToQueue(idToken);
@@ -110,6 +102,11 @@ class MatchMakingSerice {
     } catch (e) {
       print("Error when getting queue: $e");
     }
+    return null;
+  }
+
+  MatchModel handleQueued(String message) {
+    return MatchService().getMatchFromJson(message);
   }
 }
 

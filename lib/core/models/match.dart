@@ -1,24 +1,25 @@
-import './player1.dart';
+import 'player.dart';
 
-class Match {
+class MatchModel {
   final String matchId;
   final Player player1;
   final Player player2;
   final String gameMode;
   final String server;
   final DateTime createdAt;
+  bool isOnline;
 
-  Match({
-    required this.matchId,
-    required this.player1,
-    required this.player2,
-    required this.gameMode,
-    required this.server,
-    required this.createdAt,
-  });
+  MatchModel(
+      {required this.matchId,
+      required this.player1,
+      required this.player2,
+      required this.gameMode,
+      required this.server,
+      required this.createdAt,
+      this.isOnline = false});
 
-  factory Match.fromJson(Map<String, dynamic> json) {
-    return Match(
+  factory MatchModel.fromJson(Map<String, dynamic> json) {
+    return MatchModel(
       matchId: json['matchId'],
       player1: Player.fromJson(json['player1']),
       player2: Player.fromJson(json['player2']),

@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import '../widgets/widgets.dart';
 import '../constants/constants.dart';
-import '../models/game.dart';
+// import '../models/player.dart';
 import '../models/player.dart';
+import '../models/match.dart';
 
 class OfflineGameScreen extends StatefulWidget {
   const OfflineGameScreen({super.key});
@@ -112,20 +113,14 @@ class _OfflineGameScreenState extends State<OfflineGameScreen> {
                       Navigator.pushNamed(
                         context,
                         '/board',
-                        arguments: Game(
-                            id: "null",
-                            whitePlayer: Player(
-                                username: whitePlayerName,
-                                rating: 1200,
-                                ratingChanges: []),
-                            blackPlayer: Player(
-                                username: blackPlayerName,
-                                rating: 1200,
-                                ratingChanges: []),
-                            startTime: DateTime.now(),
-                            isOnline: false,
-                            timeControl:
-                                selectedTimeControl), // Truyền game vào arguments
+                        arguments: MatchModel(
+                          matchId: "null",
+                          player1: Player(id: whitePlayerName, rating: 1200),
+                          player2: Player(id: blackPlayerName, rating: 1200),
+                          gameMode: selectedTimeControl,
+                          server: "null",
+                          createdAt: DateTime.now(),
+                        ),
                       );
                     },
                     child: const Text(
