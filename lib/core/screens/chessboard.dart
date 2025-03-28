@@ -287,6 +287,73 @@ class _ChessboardState extends State<Chessboard> {
     );
   }
 
+  Widget _buildDraggablePiece(String? piece, String coor) {
+    if (piece == null) return const SizedBox.shrink();
+
+    return Draggable<String>(
+      data: coor,
+      feedback: Image.asset(
+        getPieceAsset(piece),
+        width: 40,
+        height: 40,
+        colorBlendMode: BlendMode.modulate,
+      ),
+      childWhenDragging: const SizedBox.shrink(),
+      onDragStarted: () {
+        // <-- Thêm callback khi bắt đầu kéo
+        setState(() {
+          selectedSquare = coor; // Lưu vị trí quân đang kéo
+          validMoves = _genMove(coor, game); // Tính toán nước đi hợp lệ
+          validSquares = _toSanMove(validMoves).toSet(); // Cập nhật ô hợp lệ
+        });
+      },
+      onDragEnd: (details) {
+        // <-- Xử lý khi kết thúc kéo
+        if (!details.wasAccepted) {
+          setState(() {
+            selectedSquare = null; // Reset nếu không thả vào ô hợp lệ
+            validSquares = {};
+          });
+        }
+      },
+      child: Image.asset(
+        getPieceAsset(piece),
+        fit: BoxFit.contain,
+      ),
+    );
+  }
+
+  String getPieceAsset(String piece) {
+    switch (piece) {
+      case 'r':
+        return 'assets/pieces/Chess_rdt60.png';
+      case 'n':
+        return 'assets/pieces/Chess_ndt60.png';
+      case 'b':
+        return 'assets/pieces/Chess_bdt60.png';
+      case 'q':
+        return 'assets/pieces/Chess_qdt60.png';
+      case 'k':
+        return 'assets/pieces/Chess_kdt60.png';
+      case 'p':
+        return 'assets/pieces/Chess_pdt60.png';
+      case 'R':
+        return 'assets/pieces/Chess_rlt60.png';
+      case 'N':
+        return 'assets/pieces/Chess_nlt60.png';
+      case 'B':
+        return 'assets/pieces/Chess_blt60.png';
+      case 'Q':
+        return 'assets/pieces/Chess_qlt60.png';
+      case 'K':
+        return 'assets/pieces/Chess_klt60.png';
+      case 'P':
+        return 'assets/pieces/Chess_plt60.png';
+      default:
+        return '';
+    }
+  }
+
   Widget handleChessBoard() {
     return Stack(
       children: [
@@ -294,96 +361,53 @@ class _ChessboardState extends State<Chessboard> {
         Center(
           child: AspectRatio(
             aspectRatio: 1,
-            child: Transform(
-              alignment: Alignment.center,
-              transform: enableFlip && !isWhite
-                  ? Matrix4.rotationY(math.pi)
-                  : Matrix4.identity(),
-              // isFlipped ? Matrix4.rotationX(math.pi) : Matrix4.identity(),
-              child: GridView.builder(
-                physics: const NeverScrollableScrollPhysics(),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 8,
-                  childAspectRatio: 1.0,
-                ),
-                itemCount: 64,
-                itemBuilder: (context, index) {
-                  int row =
-                      enableFlip && !isWhite ? 7 - (index ~/ 8) : index ~/ 8;
-                  int col =
-                      enableFlip && !isWhite ? 7 - (index % 8) : index % 8;
-                  String coor = parsePieceCoordinate(col, row);
-                  bool isValidSquare = validSquares.contains(coor);
+            child: GridView.builder(
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 8,
+                childAspectRatio: 1.0,
+              ),
+              itemCount: 64,
+              itemBuilder: (context, index) {
+                int transformedIndex =
+                    enableFlip && !isWhite ? 63 - index : index;
+                int row = transformedIndex ~/ 8;
+                int col = transformedIndex % 8;
+                String coor = parsePieceCoordinate(col, row);
+                bool isValidSquare = validSquares.contains(coor);
+                String? piece = board[row][col];
 
-                  return GestureDetector(
-                    onTap: () => _handleMove(coor),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color:
-                            (row + col) % 2 == 0 ? Colors.white : Colors.grey,
-                        border: Border.all(
-                          color: isValidSquare ? Colors.green : Colors.black12,
-                          width: isValidSquare ? 3 : 1,
+                return DragTarget<String>(
+                  onWillAcceptWithDetails: (data) {
+                    // Kiểm tra nước đi hợp lệ
+                    return isValidSquare;
+                  },
+                  onAcceptWithDetails: (data) {
+                    // Cập nhật vị trí quân cờ
+                    _handleMove(coor);
+                  },
+                  builder: (context, candidateData, rejectedData) {
+                    return GestureDetector(
+                      onTap: () => _handleMove(coor),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color:
+                              (row + col) % 2 == 0 ? Colors.white : Colors.grey,
+                          border: Border.all(
+                            color:
+                                isValidSquare ? Colors.green : Colors.black12,
+                            width: isValidSquare ? 2 : 1,
+                          ),
+                        ),
+                        child: Center(
+                          child: _buildDraggablePiece(piece, coor),
                         ),
                       ),
-                      child: Center(child: _buildPiece(board[row][col])),
-                    ),
-                  );
-                },
-              ),
+                    );
+                  },
+                );
+              },
             ),
-          ),
-        ),
-
-        Positioned.fill(
-          child: Column(
-            children: List.generate(8, (row) {
-              return Expanded(
-                child: Align(
-                  alignment: Alignment.topLeft,
-                  child: Padding(
-                    padding: const EdgeInsets.only(left: 2, top: 2),
-                    child: Text(
-                      isWhite ? "${8 - row}" : "${row + 1}",
-                      style: TextStyle(
-                        fontSize: 8,
-                        fontWeight: FontWeight.bold,
-                        color: (row % 2 == 0)
-                            ? (isWhite ? Colors.grey : Colors.white)
-                            : (isWhite ? Colors.white : Colors.grey),
-                      ),
-                    ),
-                  ),
-                ),
-              );
-            }),
-          ),
-        ),
-
-        // Overlay số 1-8 (hàng)
-        Positioned.fill(
-          child: Row(
-            children: List.generate(8, (col) {
-              return Expanded(
-                  child: Align(
-                alignment: Alignment.bottomRight,
-                child: Padding(
-                  padding: const EdgeInsets.only(bottom: 2, right: 2),
-                  child: Text(
-                    isWhite
-                        ? String.fromCharCode(97 + col)
-                        : String.fromCharCode(104 - col),
-                    style: TextStyle(
-                      fontSize: 8,
-                      fontWeight: FontWeight.bold,
-                      color: (col % 2 == 0)
-                          ? (isWhite ? Colors.white : Colors.grey)
-                          : (isWhite ? Colors.grey : Colors.white),
-                    ),
-                  ),
-                ),
-              ));
-            }),
           ),
         ),
       ],
