@@ -1,35 +1,49 @@
+import 'package:flutter/widgets.dart';
+import 'package:flutter_slchess/core/models/user.dart';
+
 import '../constants/constants.dart';
 import 'dart:async';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:web_socket_channel/io.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert'; // Để sử dụng jsonEncode
-import 'package:shared_preferences/shared_preferences.dart';
+// import 'package:shared_preferences/shared_preferences.dart';
 
 import './matchService.dart';
 import '../models/match.dart';
 
 class MatchMakingSerice {
-  static final String _wsGameUrl = WebsocketConstants.game;
-  static const String _wsQueueUrl = WebsocketConstants.queueing;
-  static const String _matchMakingApiUrl = ApiConstants.matchMaking;
+  static final String _localWsGameUrl = WebsocketConstants.game;
+  static final String _wsQueueUrl = WebsocketConstants.queueing;
+  static final String _matchMakingApiUrl = ApiConstants.matchMaking;
 
-  static WebSocketChannel startGame(String matchId, String idToken) {
+  static WebSocketChannel startGame(
+      String matchId, String idToken, String server) {
     final WebSocketChannel channel = IOWebSocketChannel.connect(
-      Uri.parse(_wsGameUrl),
+      Uri.parse("ws://$server:7202/game/$matchId"),
       headers: {
+        'Content-Type': 'application/json',
         'Authorization': idToken, // Thêm token vào header
       },
     );
     return channel;
   }
 
-  void makeMove(String move, WebSocketChannel channel) {
-    channel.sink.add(jsonEncode({
-      "type": "gameData",
-      "data": {"action": "move", "move": move},
-      "createdAt": DateTime.now().toIso8601String()
-    }));
+  static void makeMove(String move, WebSocketChannel channel) {
+    try {
+      final data = {
+        "type": "gameData",
+        "data": {"action": "move", "move": move},
+        "createdAt": DateTime.now().toUtc().toIso8601String()
+      };
+      print('Sending move data: ${jsonEncode(data)}');
+      channel.sink.add(jsonEncode(data));
+    } catch (e, stackTrace) {
+      print('Error sending move: $e');
+      print('Stack trace: $stackTrace');
+      // Kiểm tra trạng thái kết nối
+      print('Connection state: ${channel.closeCode} - ${channel.closeReason}');
+    }
   }
 
   void disconnect(WebSocketChannel channel) {
@@ -46,28 +60,52 @@ class MatchMakingSerice {
 
     channel.sink.add(jsonEncode({"action": "queueing"}));
 
-    MatchModel? matchData;
+    Completer<MatchModel?> completer = Completer();
 
     channel.stream.listen(
-      (message) {
-        final data = jsonDecode(message);
-        if (data.containsKey("matchId")) {
-          matchData = handleQueued(message);
+      (message) async {
+        try {
+          final data = jsonDecode(message);
+          print("Received WebSocket data: $data");
+          print("isMatch: ${data.containsKey("matchId")}");
+          if (data.containsKey("matchId")) {
+            try {
+              MatchModel matchData = await handleQueued(message);
+              if (!completer.isCompleted) {
+                completer.complete(matchData); // Hoàn thành completer trước
+                channel.sink.close(); // Đóng WebSocket sau khi hoàn thành
+              }
+            } catch (e) {
+              if (!completer.isCompleted) completer.completeError(e);
+            }
+          }
+        } catch (e) {
+          print("Error parsing WebSocket message: $e");
+          if (!completer.isCompleted) {
+            completer.completeError(e);
+          }
         }
       },
       onError: (error) {
-        print("Error: $error");
+        print("WebSocket error: $error");
+        if (!completer.isCompleted) {
+          completer.completeError(error);
+        }
       },
       onDone: () {
-        print("Connection closed");
+        print("WebSocket connection closed");
+        if (!completer.isCompleted) {
+          completer.complete(null);
+        }
       },
+      cancelOnError: true, // Đảm bảo ngắt stream nếu gặp lỗi nghiêm trọng
     );
-    return matchData;
+
+    return completer.future;
   }
 
   Future<MatchModel?> getQueue(String idToken, String gameMode, double rating,
       {int minRating = 0, int maxRating = 100}) async {
-    // Cập nhật giá trị mặc định cho minRating và maxRating nếu cần
     minRating = minRating == 0 ? (rating - 50).toInt() : minRating;
     maxRating = maxRating == 100 ? (rating + 50).toInt() : maxRating;
 
@@ -76,8 +114,7 @@ class MatchMakingSerice {
         Uri.parse(_matchMakingApiUrl),
         headers: {
           'Authorization': 'Bearer $idToken',
-          'Content-Type':
-              'application/json', // Đảm bảo rằng Content-Type được thiết lập
+          'Content-Type': 'application/json',
         },
         body: jsonEncode({
           "minRating": minRating,
@@ -87,17 +124,19 @@ class MatchMakingSerice {
       );
 
       if (response.statusCode == 200) {
-        print('Queue retrieved successfully!');
-
-        // MatchModel data = MatchService().getMatchFromJson(response.body);
-        // print(data.toJson());
-
-        return handleQueued(response.body);
+        try {
+          return await handleQueued(response.body);
+        } catch (e) {
+          print("Error handling queue: $e");
+          return null;
+        }
       } else if (response.statusCode == 202) {
-        print('Queue creation in progress...');
-        connectToQueue(idToken);
-      } else {
-        print("Error: [Status ${response.statusCode}] ${response.body}");
+        try {
+          return await connectToQueue(idToken);
+        } catch (e) {
+          print("Error in WebSocket: $e");
+          return null;
+        }
       }
     } catch (e) {
       print("Error when getting queue: $e");
@@ -105,8 +144,19 @@ class MatchMakingSerice {
     return null;
   }
 
-  MatchModel handleQueued(String message) {
-    return MatchService().getMatchFromJson(message);
+  bool isUserWhite(MatchModel match, UserModel user) =>
+      match.player1.user.id == user.id;
+
+  Future<MatchModel> handleQueued(String message) async {
+    try {
+      print("[DEBUG] Raw WebSocket message: $message");
+      final match = await MatchService().getMatchFromJson(message);
+      print("[DEBUG] Parsed Match: ${match.toJson()}");
+      return match;
+    } catch (e, stackTrace) {
+      print("[ERROR] handleQueued failed: $e\n$stackTrace");
+      rethrow; // Đẩy lỗi lên để catch ở tầng trên
+    }
   }
 }
 

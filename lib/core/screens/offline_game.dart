@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import '../widgets/widgets.dart';
 import '../constants/constants.dart';
-// import '../models/player.dart';
 import '../models/player.dart';
 import '../models/match.dart';
+import '../models/user.dart';
+import '../widgets/error_dialog.dart';
 
 class OfflineGameScreen extends StatefulWidget {
   const OfflineGameScreen({super.key});
@@ -101,22 +102,30 @@ class _OfflineGameScreenState extends State<OfflineGameScreen> {
                       // Bắt đầu game với thời gian đã chọn
                       if (selectedTimeControl.isEmpty) {
                         // Hiển thị thông báo lỗi
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Vui lòng chọn thời gian chơi'),
-                            backgroundColor: Colors.red,
-                          ),
-                        );
+                        // ScaffoldMessenger.of(context).showSnackBar(
+                        //   const SnackBar(
+                        //     content: Text('Vui lòng chọn thời gian chơi'),
+                        //     backgroundColor: Colors.red,
+                        //   ),
+                        // );
+                        ErrorDialog().showPopupError(
+                            context, "Vui lòng chọn thời gian chơi");
                         return;
                       }
 
                       Navigator.pushNamed(
                         context,
-                        '/board',
+                        '/board_offline',
                         arguments: MatchModel(
                           matchId: "null",
-                          player1: Player(id: whitePlayerName, rating: 1200),
-                          player2: Player(id: blackPlayerName, rating: 1200),
+                          player1: Player(
+                              user: UserModel(
+                                  id: "null", username: whitePlayerName),
+                              rating: 1200),
+                          player2: Player(
+                              user: UserModel(
+                                  id: "null", username: blackPlayerName),
+                              rating: 1200),
                           gameMode: selectedTimeControl,
                           server: "null",
                           createdAt: DateTime.now(),

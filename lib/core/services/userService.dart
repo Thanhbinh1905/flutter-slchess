@@ -6,8 +6,8 @@ import '../constants/constants.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class UserService {
-  static const String getUserApiUrl = ApiConstants.getUserInfo;
-  static const String getSelfUserApiUrl = ApiConstants.getSelfUserInfoUrl;
+  static String getUserApiUrl = ApiConstants.getUserInfo;
+  static String getSelfUserApiUrl = ApiConstants.getSelfUserInfoUrl;
 
   Future<UserModel> getUserInfo(String userId, String idToken) async {
     try {

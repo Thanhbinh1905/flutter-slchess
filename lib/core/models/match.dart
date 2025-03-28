@@ -8,21 +8,29 @@ class MatchModel {
   final String server;
   final DateTime createdAt;
   bool isOnline;
+  bool isWhite;
+  bool enableSwitchBoard;
 
-  MatchModel(
-      {required this.matchId,
-      required this.player1,
-      required this.player2,
-      required this.gameMode,
-      required this.server,
-      required this.createdAt,
-      this.isOnline = false});
+  MatchModel({
+    required this.matchId,
+    required this.player1,
+    required this.player2,
+    required this.gameMode,
+    required this.server,
+    required this.createdAt,
+    this.isOnline = false,
+    this.isWhite = true,
+    this.enableSwitchBoard = false,
+  });
 
-  factory MatchModel.fromJson(Map<String, dynamic> json) {
+  static Future<MatchModel> fromJson(Map<String, dynamic> json) async {
+    final player1 = await Player.fromJson(json['player1']);
+    final player2 = await Player.fromJson(json['player2']);
+
     return MatchModel(
       matchId: json['matchId'],
-      player1: Player.fromJson(json['player1']),
-      player2: Player.fromJson(json['player2']),
+      player1: player1,
+      player2: player2,
       gameMode: json['gameMode'],
       server: json['server'],
       createdAt: DateTime.parse(json['createdAt']),

@@ -1,123 +1,148 @@
-import 'dart:ffi';
-
 import 'package:flutter/material.dart';
 
 import 'package:chess/chess.dart' as chess;
 import 'package:flutter_slchess/core/models/match.dart';
+import 'package:flutter_slchess/core/models/gameState_model.dart';
+import 'package:flutter_slchess/core/services/matchmaking_service.dart';
+import 'package:flutter_slchess/core/services/cognito_auth_service.dart';
+import '../widgets/error_dialog.dart';
 
 import 'dart:async'; // Thêm import này
+import 'dart:math' as math; // Thêm import này
+import 'dart:convert'; // Để sử dụng jsonEncode
+
+import 'package:web_socket_channel/web_socket_channel.dart';
 
 class Chessboard extends StatefulWidget {
   // final Game game;
   final MatchModel match;
-
   const Chessboard({super.key, required this.match});
-
   @override
   State<Chessboard> createState() => _ChessboardState();
 }
 
 class _ChessboardState extends State<Chessboard> {
-  var game = chess.Chess();
+  chess.Chess game = chess.Chess();
 
   List<String> listFen = [];
-
   int halfmove = 0;
-
   late List<List<String?>> board;
-
   late String fen;
-
   late String timeControl; // Khai báo biến timeControl
   late int timeIncrement; // Khai báo biến timeControl
-
   late int whiteTime; // Thời gian còn lại cho bên trắng
-
   late int blackTime; // Thời gian còn lại cho bên đen
-
   late DateTime lastUpdate;
-
   Timer? timer; // Timer để trừ thời gian
-
   Set<String> validSquares = {}; // Danh sách các ô hợp lệ
-
   List<chess.Move> validMoves = [];
-
   String? selectedSquare; // Ô được chọn ban đầu
-
   bool isWhiteTurn = true; // Biến để theo dõi lượt đi
-
   late Stopwatch _stopwatch; // Thêm biến Stopwatch
-
   late ScrollController _scrollController; // Thêm ScrollController
-
   late bool isOnline;
-
   bool isPaused = false; // Biến để theo dõi trạng thái tạm dừng
+  late String server;
+
+  // bool isFlipped = false; // Trạng thái xoay bàn cờ
+  bool enableFlip = true;
+  bool isWhite = true;
+
+  // Websocket server
+  CognitoAuth cognitoAuth = CognitoAuth();
+  late MatchModel match;
+  late WebSocketChannel channel;
 
   @override
   void initState() {
     super.initState();
-
-    _stopwatch = Stopwatch();
-
-    _scrollController = ScrollController(); // Khởi tạo ScrollController
-
-    _scrollToBottomAfterBuild();
-    isOnline = widget.match.isOnline;
-    timeControl = widget.match.gameMode.split("+")[0];
-    timeIncrement = int.parse(widget.match.gameMode.split("+")[1]);
+    match = widget.match;
+    isWhite = match.isWhite;
+    isOnline = match.isOnline;
+    timeControl = match.gameMode.split("+")[0];
+    timeIncrement = int.parse(match.gameMode.split("+")[1]);
+    server = match.server;
 
     whiteTime = int.parse(timeControl) * 60 * 1000;
-
     blackTime = whiteTime;
 
-    fen =
-        'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'; // Đảm bảo FEN có đủ 6 trường
-
+    fen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
     listFen.add(fen);
-
     game.load(fen);
 
     board = parseFEN(listFen.last);
 
-    // Bắt đầu đếm thời gian ngay khi init
+    _stopwatch = Stopwatch();
+    _scrollController = ScrollController(); // Khởi tạo ScrollController
+    _scrollToBottomAfterBuild();
 
+    // Bắt đầu đếm thời gian ngay khi init
     _stopwatch.start();
 
     timer = Timer.periodic(const Duration(milliseconds: 100), (Timer t) {
       if (!_stopwatch.isRunning) return;
-
       final elapsed = _stopwatch.elapsedMilliseconds;
-
       _stopwatch.reset(); // Reset sau mỗi lần tính toán
-
       _stopwatch.start();
-
       setState(() {
         if (isWhiteTurn) {
-          whiteTime -= elapsed;
-
-          if (whiteTime <= 0) {
-            whiteTime = 0;
-
-            t.cancel();
-
-            print("White time out!");
+          if (halfmove > 0) {
+            whiteTime -= elapsed;
+            if (whiteTime <= 0) {
+              whiteTime = 0;
+              t.cancel();
+              print("White time out!");
+              showGameEndDialog(context, "White loss", "onTime");
+            }
           }
         } else {
           blackTime -= elapsed;
-
           if (blackTime <= 0) {
             blackTime = 0;
-
             t.cancel();
-
             print("Black time out!");
+            showGameEndDialog(context, "Black loss", "onTime");
           }
         }
       });
     });
+
+    _initializeGame();
+  }
+
+  Future<void> _initializeGame() async {
+    if (isOnline) {
+      String? storedIdToken = await cognitoAuth.getStoredIdToken();
+      print(storedIdToken!.length);
+      channel =
+          MatchMakingSerice.startGame(match.matchId, storedIdToken, server);
+
+      channel.stream.listen(
+        (message) {
+          final data = jsonDecode(message);
+
+          if (data['type'] == "gameState") {
+            print("hello1");
+            print(data);
+            GameStateModel gameStateModel =
+                GameStateModel.fromJson(data as Map<String, dynamic>);
+            print("hello2");
+            fen = data['game']['fen'];
+            listFen.add(fen);
+            board = parseFEN(fen);
+            game.load(fen);
+
+            whiteTime = gameStateModel.clocks[0];
+            blackTime = gameStateModel.clocks[1];
+
+            isWhiteTurn = game.turn.name == "WHITE" ? true : false;
+          }
+        },
+        onError: (error) => print("WebSocket Error: $error"),
+        onDone: () => print(
+            "WebSocket closed (Code: ${channel.closeCode}, Reason: ${channel.closeReason})"),
+      );
+    }
   }
 
   void _scrollToBottomAfterBuild() {
@@ -136,13 +161,9 @@ class _ChessboardState extends State<Chessboard> {
     }
   }
 
-// Khi đổi lượt, reset Stopwatch
-
   void switchTurn() {
     _stopwatch.reset();
-
     _stopwatch.start();
-
     setState(() {
       isWhiteTurn = !isWhiteTurn;
     });
@@ -151,11 +172,8 @@ class _ChessboardState extends State<Chessboard> {
   @override
   void dispose() {
     timer?.cancel();
-
     _stopwatch.stop();
-
-    _scrollController.dispose(); // Hủy ScrollController khi không còn sử dụng
-
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -181,168 +199,14 @@ class _ChessboardState extends State<Chessboard> {
           gameHistory(game),
 
           playerWidget(
-              playerName: widget.match.player2.id,
+              playerName: match.player2.user.username,
+              // playerName: match.player2.id,
               timeRemaining: formatTime(
                   blackTime)), // Hiển thị thời gian còn lại cho bên đen
-
-          Center(
-            child: AspectRatio(
-              aspectRatio: 1,
-              child: GridView.builder(
-                physics: const NeverScrollableScrollPhysics(),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 8,
-                  childAspectRatio: 1.0,
-                ),
-                itemCount: 64,
-                itemBuilder: (context, index) {
-                  int row = index ~/ 8;
-
-                  int col = index % 8;
-
-                  String coor = parsePieceCoordinate(col, row);
-
-                  // Kiểm tra xem ô hiện tại có nằm trong danh sách ô hợp lệ không
-
-                  bool isValidSquare = validSquares.contains(coor);
-
-                  return GestureDetector(
-                    onTap: () {
-                      print(halfmove);
-
-                      print(listFen.length);
-
-                      // Kiểm tra điều kiện halfmove
-
-                      if (whiteTime <= 0) {
-                        print("White time out!");
-
-                        return;
-                      }
-
-                      if (blackTime <= 0) {
-                        print("Black time out!");
-
-                        return;
-                      }
-
-                      if (halfmove != listFen.length - 1) {
-                        print("Không thể di chuyển quân, vui lòng chờ lượt.");
-
-                        return; // Không cho phép di chuyển nếu không đúng lượt
-                      }
-
-                      setState(() {
-                        // Cập nhật board với FEN từ listFen tại chỉ số tương ứng
-
-                        if (selectedSquare == null ||
-                            !validSquares.contains(coor)) {
-                          // Nếu chưa chọn ô nào, lấy các nước đi hợp lệ từ ô hiện tại
-
-                          selectedSquare = coor;
-
-                          validMoves = _genMove(coor, game);
-
-                          validSquares = _toSanMove(validMoves).toSet();
-                        } else if (validSquares.contains(coor)) {
-                          // Nếu ô hiện tại là ô hợp lệ, thực hiện di chuyển
-
-                          chess.Move move = validMoves.firstWhere((m) =>
-                              m.fromAlgebraic == selectedSquare &&
-                              m.toAlgebraic == coor);
-
-                          bool success = game.move(move);
-
-                          if (success) {
-                            // Cập nhật FEN và bàn cờ
-
-                            fen = game.fen; // Cập nhật FEN mới
-
-                            listFen.add(fen); // Lưu FEN vào listFen
-
-                            board = parseFEN(fen); // Cập nhật bàn cờ
-
-                            if (isWhiteTurn) {
-                              whiteTime += timeIncrement *
-                                  1000; // Cộng thời gian cho bên trắng
-                            } else {
-                              blackTime += timeIncrement *
-                                  1000; // Cộng thời gian cho bên đen
-                            }
-
-                            _scrollToBottomAfterBuild();
-
-                            halfmove = listFen.length - 1; // Tăng số lượt đi
-
-                            print("Game halfmove: $halfmove");
-
-                            // Đổi lượt
-
-                            isWhiteTurn = !isWhiteTurn;
-                          }
-
-                          // Đặt lại trạng thái
-
-                          selectedSquare = null;
-
-                          validSquares = {};
-
-                          if (game.game_over) {
-                            print("Game over");
-
-                            var turnColor = game.turn.name;
-
-                            if (game.in_checkmate) {
-                              print("$turnColor CHECKMATE");
-
-                              showGameEndDialog(
-                                  context, "$turnColor WON", "CHECKMATE");
-                            } else if (game.in_draw) {
-                              late String resultStr;
-
-                              if (game.in_stalemate) {
-                                resultStr = "Stalemate";
-                              } else if (game.in_threefold_repetition) {
-                                resultStr = "Repetition";
-                              } else if (game.insufficient_material) {
-                                resultStr = "Insufficient material";
-                              }
-
-                              print(resultStr);
-                            }
-                          }
-                        } else {
-                          // Nếu nhấn vào ô không hợp lệ, đặt lại trạng thái
-
-                          selectedSquare = null;
-
-                          validSquares = {};
-                        }
-                      });
-                    },
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color:
-                            (row + col) % 2 == 0 ? Colors.white : Colors.grey,
-                        border: Border.all(
-                          color: isValidSquare ? Colors.green : Colors.black12,
-                          width: isValidSquare ? 3 : 1,
-                        ),
-                      ),
-                      child: Center(
-                        // Sử dụng _buildPiece để hiển thị ảnh thay vì chữ
-
-                        child: _buildPiece(board[row][col]),
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-          ),
-
+          handleChessBoard(),
           playerWidget(
-              playerName: widget.match.player2.id,
+              playerName: match.player1.user.username,
+              // playerName: match.player2.id,
               timeRemaining: formatTime(
                   whiteTime)), // Hiển thị thời gian còn lại cho bên trắng
         ],
@@ -423,6 +287,200 @@ class _ChessboardState extends State<Chessboard> {
     );
   }
 
+  Widget handleChessBoard() {
+    return Stack(
+      children: [
+        // Bàn cờ chính
+        Center(
+          child: AspectRatio(
+            aspectRatio: 1,
+            child: Transform(
+              alignment: Alignment.center,
+              transform: enableFlip && !isWhite
+                  ? Matrix4.rotationY(math.pi)
+                  : Matrix4.identity(),
+              // isFlipped ? Matrix4.rotationX(math.pi) : Matrix4.identity(),
+              child: GridView.builder(
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 8,
+                  childAspectRatio: 1.0,
+                ),
+                itemCount: 64,
+                itemBuilder: (context, index) {
+                  int row =
+                      enableFlip && !isWhite ? 7 - (index ~/ 8) : index ~/ 8;
+                  int col =
+                      enableFlip && !isWhite ? 7 - (index % 8) : index % 8;
+                  String coor = parsePieceCoordinate(col, row);
+                  bool isValidSquare = validSquares.contains(coor);
+
+                  return GestureDetector(
+                    onTap: () => _handleMove(coor),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color:
+                            (row + col) % 2 == 0 ? Colors.white : Colors.grey,
+                        border: Border.all(
+                          color: isValidSquare ? Colors.green : Colors.black12,
+                          width: isValidSquare ? 3 : 1,
+                        ),
+                      ),
+                      child: Center(child: _buildPiece(board[row][col])),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+        ),
+
+        Positioned.fill(
+          child: Column(
+            children: List.generate(8, (row) {
+              return Expanded(
+                child: Align(
+                  alignment: Alignment.topLeft,
+                  child: Padding(
+                    padding: const EdgeInsets.only(left: 2, top: 2),
+                    child: Text(
+                      isWhite ? "${8 - row}" : "${row + 1}",
+                      style: TextStyle(
+                        fontSize: 8,
+                        fontWeight: FontWeight.bold,
+                        color: (row % 2 == 0)
+                            ? (isWhite ? Colors.grey : Colors.white)
+                            : (isWhite ? Colors.white : Colors.grey),
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }),
+          ),
+        ),
+
+        // Overlay số 1-8 (hàng)
+        Positioned.fill(
+          child: Row(
+            children: List.generate(8, (col) {
+              return Expanded(
+                  child: Align(
+                alignment: Alignment.bottomRight,
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 2, right: 2),
+                  child: Text(
+                    isWhite
+                        ? String.fromCharCode(97 + col)
+                        : String.fromCharCode(104 - col),
+                    style: TextStyle(
+                      fontSize: 8,
+                      fontWeight: FontWeight.bold,
+                      color: (col % 2 == 0)
+                          ? (isWhite ? Colors.white : Colors.grey)
+                          : (isWhite ? Colors.grey : Colors.white),
+                    ),
+                  ),
+                ),
+              ));
+            }),
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _handleMove(String coor) {
+    print("coor: $coor");
+    print(halfmove);
+    print(listFen.length);
+
+    print(isWhiteTurn);
+    print(isWhite);
+    // Kiểm tra điều kiện halfmove
+    if (whiteTime <= 0) {
+      print("White time out!");
+      return;
+    }
+
+    if (blackTime <= 0) {
+      print("Black time out!");
+      return;
+    }
+
+    if (isOnline && isWhiteTurn != isWhite) {
+      print("Không thể di chuyển quân, vui lòng chờ lượt.");
+      return;
+    }
+
+    setState(() {
+      // Cập nhật board với FEN từ listFen tại chỉ số tương ứng
+      if (selectedSquare == null || !validSquares.contains(coor)) {
+        // Nếu chưa chọn ô nào, lấy các nước đi hợp lệ từ ô hiện tại
+        selectedSquare = coor;
+        validMoves = _genMove(coor, game);
+        validSquares = _toSanMove(validMoves).toSet();
+      } else if (validSquares.contains(coor)) {
+        // Nếu ô hiện tại là ô hợp lệ, thực hiện di chuyển
+        chess.Move move = validMoves.firstWhere(
+            (m) => m.fromAlgebraic == selectedSquare && m.toAlgebraic == coor);
+        bool success = game.move(move);
+        if (success) {
+          // Cập nhật FEN và bàn cờ
+          fen = game.fen; // Cập nhật FEN mới
+          listFen.add(fen); // Lưu FEN vào listFen
+          board = parseFEN(fen); // Cập nhật bàn cờ
+          if (isWhiteTurn) {
+            whiteTime += timeIncrement * 1000; // Cộng thời gian cho bên trắng
+          } else {
+            blackTime += timeIncrement * 1000; // Cộng thời gian cho bên đen
+          }
+          _scrollToBottomAfterBuild();
+          halfmove = listFen.length - 1; // Tăng số lượt đi
+
+          String sanMove = move.fromAlgebraic + move.toAlgebraic;
+          print("Game halfmove: $halfmove, $sanMove");
+
+          if (isOnline) {
+            MatchMakingSerice.makeMove(sanMove, channel);
+          }
+          // Đổi lượt
+          isWhiteTurn = !isWhiteTurn;
+
+          if (enableFlip && !isOnline) {
+            isWhite = !isWhite;
+          }
+        }
+        // Đặt lại trạng thái
+        selectedSquare = null;
+        validSquares = {};
+        if (game.game_over) {
+          print("Game over");
+          var turnColor = game.turn.name;
+          if (game.in_checkmate) {
+            print("$turnColor CHECKMATE");
+            showGameEndDialog(context, "$turnColor WON", "CHECKMATE");
+          } else if (game.in_draw) {
+            late String resultStr;
+
+            if (game.in_stalemate) {
+              resultStr = "Stalemate";
+            } else if (game.in_threefold_repetition) {
+              resultStr = "Repetition";
+            } else if (game.insufficient_material) {
+              resultStr = "Insufficient material";
+            }
+            showGameEndDialog(context, "Draw", resultStr);
+          }
+        }
+      } else {
+        // Nếu nhấn vào ô không hợp lệ, đặt lại trạng thái
+        selectedSquare = null;
+        validSquares = {};
+      }
+    });
+  }
+
   void scrollToIndex(int index) {
     // Kiểm tra xem chỉ số có hợp lệ không
     if (index >= 0 && index < listFen.length) {
@@ -467,7 +525,6 @@ class _ChessboardState extends State<Chessboard> {
         child: const Text(" "),
       );
     }
-
     // Gom 2 nước vào một số thứ tự
 
     List<Widget> formattedMoves = List.generate(
@@ -800,80 +857,48 @@ class _ChessboardState extends State<Chessboard> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 // Tiêu đề
-
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     const SizedBox(width: 30), // Để căn giữa tiêu đề
-
                     Text(
                       resultTitle, // Ví dụ: "Trắng thắng"
-
                       style: const TextStyle(
                           fontSize: 22, fontWeight: FontWeight.bold),
                     ),
-
                     IconButton(
                       icon: const Icon(Icons.close),
                       onPressed: () => Navigator.of(context).pop(),
                     ),
                   ],
                 ),
-
                 Text(resultContent, style: const TextStyle(color: Colors.grey)),
-
                 const SizedBox(height: 10),
-
                 // Thống kê
-
                 // Row(
-
                 //   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-
                 //   children: [
-
                 //     _buildStat("1", "Nước đi hay", Colors.blue),
-
                 //     _buildStat("0", "Bỏ lỡ", Colors.red),
-
                 //     _buildStat("1", "Nước sai nghiêm trọng", Colors.red),
-
                 //   ],
-
                 // ),
-
                 // const SizedBox(height: 10),
-
                 // Nút hành động
-
                 // ElevatedButton(
-
                 //   onPressed: () {
-
                 //     // Xử lý xem lại ván đấu
-
                 //     Navigator.of(context).pop();
-
                 //   },
-
                 //   style: ElevatedButton.styleFrom(
-
                 //     backgroundColor: Colors.green,
-
                 //     shape: RoundedRectangleBorder(
-
                 //         borderRadius: BorderRadius.circular(10)),
-
                 //   ),
-
                 //   child: const Text("Xem lại ván đấu",
-
                 //       style: TextStyle(fontSize: 18, color: Colors.white)),
-
                 // ),
-
                 // const SizedBox(height: 10),
-
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
@@ -954,19 +979,17 @@ class _ChessboardState extends State<Chessboard> {
             children: [
               _buildMenuItem(context, Icons.flag, "Chấp nhận thua", () {
                 Navigator.pop(context);
-
                 // Xử lý logic đầu hàng ở đây
               }),
-              _buildMenuItem(
-                  context, Icons.sync_disabled, "Tắt chức năng xoay bàn cờ",
-                  () {
-                Navigator.pop(context);
+              _buildMenuItem(context, Icons.sync_disabled,
+                  "${enableFlip ? "Tắt" : "Bật"} chức năng xoay bàn cờ", () {
+                enableFlip = !enableFlip;
 
+                Navigator.pop(context);
                 // Xử lý logic tắt xoay bàn cờ ở đây
               }),
               _buildMenuItem(context, Icons.copy, "Sao chép PGN", () {
                 Navigator.pop(context);
-
                 // Xử lý sao chép PGN ở đây
               }),
             ],

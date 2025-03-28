@@ -4,16 +4,13 @@ import 'package:app_links/app_links.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:encrypted_shared_preferences/encrypted_shared_preferences.dart';
 import '../../main.dart';
 import './userService.dart';
 
-import '../models/user.dart';
-
 class CognitoAuth {
   late AppLinks _appLinks;
-  final storage = const FlutterSecureStorage();
+  final EncryptedSharedPreferences storage = EncryptedSharedPreferences();
   final userService = UserService();
 
   final cognitoUrl = dotenv.env['COGNITO_URL'];
@@ -75,16 +72,13 @@ class CognitoAuth {
     }
   }
 
+  // Future<void> resetToken
+
   Future<void> getToken(String code) async {
     try {
       final tokenResponse = await http.post(
-        Uri.https(
-          cognitoUrl!,
-          '/oauth2/token',
-        ),
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
+        Uri.https(cognitoUrl!, '/oauth2/token'),
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
         body: {
           'grant_type': 'authorization_code',
           'client_id': cognitoClientId,
@@ -96,32 +90,47 @@ class CognitoAuth {
       if (tokenResponse.statusCode == 200) {
         final tokens = json.decode(tokenResponse.body);
 
-        // Lưu các token vào secure storage
-        await storage.write(
-            key: ACCESS_TOKEN_KEY, value: tokens['access_token']);
-        await storage.write(key: ID_TOKEN_KEY, value: tokens['id_token']);
-        if (tokens['refresh_token'] != null) {
-          await storage.write(
-              key: REFRESH_TOKEN_KEY, value: tokens['refresh_token']);
-        }
+        await storage.setString(ACCESS_TOKEN_KEY, tokens['access_token']);
+        await storage.setString(ID_TOKEN_KEY, tokens['id_token']);
+        await storage.setString(REFRESH_TOKEN_KEY, tokens['refresh_token']);
 
-        // print('Đã lưu token thành công');
-
-        // Lấy và lưu thông tin người dùng
+        // Tiếp tục lấy thông tin người dùng
         await userService.saveSelfUserInfo(
             tokens['access_token'], tokens['id_token']);
 
-        // UserModel? player = await userService.getPlayer();
-
-        // print("player: ${player!.toJson()}");
-
-        // Chuyển đến màn hình home
         navigateToHome();
       } else {
-        print('Lỗi lấy token: ${tokenResponse.body}');
+        print('❌ Lỗi lấy token: ${tokenResponse.body}');
       }
     } catch (e) {
-      print('Lỗi xử lý token: $e');
+      print('❌ Lỗi xử lý token: $e');
+    }
+  }
+
+  Future<void> refreshToken() async {
+    final refreshToken = await storage.getString(REFRESH_TOKEN_KEY);
+
+    try {
+      final response = await http.post(
+        Uri.https(cognitoUrl!, '/oauth2/token'),
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: {
+          'grant_type': 'refresh_token',
+          'client_id': cognitoClientId!,
+          'refresh_token': refreshToken,
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final tokens = json.decode(response.body);
+        await storage.setString(ACCESS_TOKEN_KEY, tokens['access_token']);
+        print('Token đã được refresh.');
+      } else {
+        print('Lỗi refresh token: ${response.body}');
+        await clearTokens(); // Xóa token nếu refresh thất bại
+      }
+    } catch (e) {
+      print('Lỗi xử lý refresh token: $e');
     }
   }
 
@@ -134,18 +143,19 @@ class CognitoAuth {
   }
 
   // Hàm lấy token đã lưu
-  Future<String?> getStoredAccessToken() async {
-    return await storage.read(key: ACCESS_TOKEN_KEY);
-  }
+  Future<String?> getStoredAccessToken() => storage.getString(ACCESS_TOKEN_KEY);
 
   Future<String?> getStoredIdToken() async {
-    return await storage.read(key: ID_TOKEN_KEY);
+    String? token = await storage.getString(ID_TOKEN_KEY);
+    return token;
   }
 
-  // Hàm xóa token (logout)
+  Future<String?> getStoredRefreshToken() =>
+      storage.getString(REFRESH_TOKEN_KEY);
+
   Future<void> clearTokens() async {
-    await storage.delete(key: ACCESS_TOKEN_KEY);
-    await storage.delete(key: ID_TOKEN_KEY);
-    await storage.delete(key: REFRESH_TOKEN_KEY);
+    await storage.remove(ACCESS_TOKEN_KEY);
+    await storage.remove(ID_TOKEN_KEY);
+    await storage.remove(REFRESH_TOKEN_KEY);
   }
 }

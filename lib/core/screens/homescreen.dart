@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../services/cognito_auth_service.dart';
+// import '../services/cognito_auth_service.dart';
 import 'play_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -10,7 +10,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  final CognitoAuth _cognitoAuth = CognitoAuth();
+  // final CognitoAuth _cognitoAuth = CognitoAuth();
 
   @override
   Widget build(BuildContext context) {

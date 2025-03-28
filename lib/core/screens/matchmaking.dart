@@ -20,14 +20,10 @@ class _MatchMakingScreenState extends State<MatchMakingScreen> {
   MatchMakingSerice matchMakingSerice = MatchMakingSerice();
   CognitoAuth cognitoAuth = CognitoAuth();
   UserService userService = UserService();
-
-  late String? storedIdToken;
+  MatchMakingSerice matchMakingService = MatchMakingSerice();
 
   late UserModel? player;
-
   late MatchModel? match;
-
-  // print("player: ${player!.toJson()}");
 
   @override
   void initState() {
@@ -37,17 +33,58 @@ class _MatchMakingScreenState extends State<MatchMakingScreen> {
   }
 
   Future<void> _initializeMatchmaking() async {
-    storedIdToken = await cognitoAuth.getStoredIdToken();
-    player = await userService.getPlayer();
+    try {
+      // Kiểm tra token không null
+      final String? storedIdToken = await cognitoAuth.getStoredIdToken();
+      if (storedIdToken == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Vui lòng đăng nhập lại")),
+          );
+        }
+        return;
+      }
 
-    final double playerRating = player!.rating;
-    // Giả sử bạn có các biến idToken và rating đã được định nghĩa
-    match = await matchMakingSerice.getQueue(
-        storedIdToken!, gameMode, playerRating);
-    if (match != null) {
+      // Kiểm tra player không null
+      player = await userService.getPlayer();
+      if (player == null || !mounted) {
+        print("Người chơi không tồn tại hoặc widget đã bị dispose");
+        return;
+      }
+
+      final double playerRating = player!.rating;
+
+      do {
+        match = await matchMakingService.getQueue(
+          storedIdToken,
+          gameMode,
+          playerRating,
+        );
+        print("match == null : ${match == null}");
+        if (match == null && mounted) {
+          print("Không tìm thấy trận đấu, đang chờ...");
+          await Future.delayed(
+              const Duration(seconds: 2)); // Đợi 2 giây trước khi thử lại
+        }
+      } while (match == null && mounted);
+
+      // Cập nhật state chỉ khi widget còn tồn tại
       setState(() {
         isQueued = true;
+        match!
+          ..isOnline = true
+          ..isWhite = matchMakingService.isUserWhite(match!, player!);
       });
+
+      // Chuyển trang
+      Navigator.popAndPushNamed(context, "/board", arguments: match);
+    } catch (e, stackTrace) {
+      print("Lỗi khi khởi tạo matchmaking: $e\n$stackTrace");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Lỗi: ${e.toString()}")),
+        );
+      }
     }
   }
 
