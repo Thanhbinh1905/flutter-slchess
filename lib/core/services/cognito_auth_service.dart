@@ -64,9 +64,7 @@ class CognitoAuth {
         },
       );
 
-      if (await canLaunchUrl(url)) {
-        await launchUrl(url);
-      }
+      await launchUrl(url);
     } catch (e) {
       print('Lỗi đăng nhập: $e');
     }
