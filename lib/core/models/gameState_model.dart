@@ -31,6 +31,32 @@ class GameStateModel {
   }
 }
 
+enum Status { CONNECTED, DISCONNECTED }
+
+class PlayerStateModel {
+  final String id;
+  final Status status;
+
+  PlayerStateModel({
+    required this.id,
+    required this.status,
+  });
+
+  factory PlayerStateModel.fromJson(Map<String, dynamic> json) {
+    return PlayerStateModel(
+      id: json['id'],
+      status: Status.values.byName(json['status']),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'status': status.name.toLowerCase(),
+    };
+  }
+}
+
 void main() {
   var json = {
     "type": "gameState",

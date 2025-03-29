@@ -29,9 +29,39 @@ class MatchMakingSerice {
     return channel;
   }
 
+  static void resign(WebSocketChannel channel) {
+    try {
+      final Map<String, Object> data = {
+        "type": "gameData",
+        "data": {"action": "resign"},
+        "created_at": DateTime.now().toUtc().toIso8601String()
+      };
+      print("Người chơi đã đầu hàng");
+      channel.sink.add(jsonEncode(data));
+    } catch (e, stackTrace) {
+      print('Lỗi khi gửi thông tin đầu hàng: $e');
+      print('Stack trace: $stackTrace');
+    }
+  }
+
+  static void offerDraw(WebSocketChannel channel) {
+    try {
+      final Map<String, Object> data = {
+        "type": "gameData",
+        "data": {"action": "offerDraw"},
+        "created_at": DateTime.now().toUtc().toIso8601String()
+      };
+      print("Offering draw");
+      channel.sink.add(jsonEncode(data));
+    } catch (e, stackTrace) {
+      print('Error offering draw: $e'); // Thêm thông báo lỗi
+      print('Stack trace: $stackTrace'); // Thêm thông tin stack trace
+    }
+  }
+
   static void makeMove(String move, WebSocketChannel channel) {
     try {
-      final data = {
+      final Map<String, Object> data = {
         "type": "gameData",
         "data": {"action": "move", "move": move},
         "createdAt": DateTime.now().toUtc().toIso8601String()

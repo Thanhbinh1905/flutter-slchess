@@ -1,0 +1,135 @@
+import 'package:flutter_slchess/core/models/gamestate_model.dart';
+import 'package:web_socket_channel/web_socket_channel.dart';
+import 'package:web_socket_channel/io.dart';
+import 'dart:convert';
+import 'package:flutter/material.dart';
+
+class MatchService {
+  final WebSocketChannel channel;
+
+  MatchService._(this.channel);
+
+  factory MatchService.startGame(
+      String matchId, String idToken, String server) {
+    final channel = IOWebSocketChannel.connect(
+      Uri.parse("ws://$server:7202/game/$matchId"),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': idToken,
+      },
+    );
+    return MatchService._(channel);
+  }
+
+  void listen(
+      {void Function(GameStateModel gameState)? onGameState,
+      void Function()? onEndgame,
+      void Function()? onStatusChange,
+      required BuildContext context}) {
+    // Thêm BuildContext vào tham số
+    channel.stream.listen(
+      (message) {
+        try {
+          final data = jsonDecode(message);
+
+          if (data['type'] == "gameState") {
+            GameStateModel gameStateModel = GameStateModel.fromJson(data);
+            if (gameStateModel.outcome != "*") {
+              onEndgame?.call();
+            }
+            onGameState?.call(gameStateModel);
+          } else if (data['type'] == "drawOffer") {
+            _showDrawOfferDialog(context); // Hiện dialog khi có đề nghị hòa
+          } else if (data['type'] == "playerStatus") {
+            onStatusChange?.call();
+          } else {
+            print("Unknown message type: ${data['type']}");
+          }
+        } catch (e, stackTrace) {
+          print('Error processing incoming message: $e');
+          print('Stack trace: $stackTrace');
+        }
+      },
+      onError: (error) {
+        print('Stream encountered an error: $error');
+      },
+      onDone: () {
+        print('Stream has been closed.');
+      },
+    );
+  }
+
+  void _showDrawOfferDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text("Đề nghị hòa"),
+          content: const Text(
+              "Người chơi đã đề nghị hòa. Bạn có muốn chấp nhận không?"),
+          actions: <Widget>[
+            TextButton(
+              child: const Text("Từ chối"),
+              onPressed: () {
+                Navigator.of(context).pop();
+                declineDraw();
+              },
+            ),
+            TextButton(
+              child: const Text("Chấp nhận"),
+              onPressed: () {
+                Navigator.of(context).pop();
+                acceptDraw();
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _sendGameData(Map<String, Object> data) {
+    final message = {
+      "type": "gameData",
+      "data": data,
+      "createdAt": DateTime.now().toUtc().toIso8601String(),
+    };
+    try {
+      final jsonMessage = jsonEncode(message);
+      print('Sending message: $jsonMessage');
+      channel.sink.add(jsonMessage);
+    } catch (e, stackTrace) {
+      print('Error sending message: $e');
+      print('Stack trace: $stackTrace');
+    }
+  }
+
+  void resign() {
+    print("Người chơi đã đầu hàng");
+    _sendGameData({"action": "resign"});
+  }
+
+  void offerDraw() {
+    print("Offering draw");
+    _sendGameData({"action": "offerDraw"});
+  }
+
+  void acceptDraw() {
+    print("Người chơi đã chấp nhận hòa");
+    _sendGameData({"action": "acceptDraw"});
+  }
+
+  void declineDraw() {
+    print("Người chơi đã từ chối hòa");
+    _sendGameData({"action": "declineDraw"});
+  }
+
+  void makeMove(String move) {
+    print('Sending move data for move: $move');
+    _sendGameData({"action": "move", "move": move});
+  }
+
+  void close() {
+    channel.sink.close();
+  }
+}

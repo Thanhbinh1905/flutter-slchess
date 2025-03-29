@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'package:chess/chess.dart' as chess;
 import 'package:flutter_slchess/core/models/match.dart';
-import 'package:flutter_slchess/core/models/gameState_model.dart';
+import 'package:flutter_slchess/core/models/gamestate_model.dart';
 import 'package:flutter_slchess/core/services/matchmaking_service.dart';
 import 'package:flutter_slchess/core/services/cognito_auth_service.dart';
 import '../widgets/error_dialog.dart';
@@ -122,11 +122,9 @@ class _ChessboardState extends State<Chessboard> {
           final data = jsonDecode(message);
 
           if (data['type'] == "gameState") {
-            print("hello1");
-            print(data);
             GameStateModel gameStateModel =
                 GameStateModel.fromJson(data as Map<String, dynamic>);
-            print("hello2");
+
             fen = data['game']['fen'];
             listFen.add(fen);
             board = parseFEN(fen);
@@ -139,8 +137,11 @@ class _ChessboardState extends State<Chessboard> {
           }
         },
         onError: (error) => print("WebSocket Error: $error"),
-        onDone: () => print(
-            "WebSocket closed (Code: ${channel.closeCode}, Reason: ${channel.closeReason})"),
+        onDone: () {
+          print(
+              "WebSocket closed (Code: ${channel.closeCode}, Reason: ${channel.closeReason})");
+          // showGameEndDialog(context, "", channel.closeReason ?? "");
+        },
       );
     }
   }
