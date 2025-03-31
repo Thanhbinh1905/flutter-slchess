@@ -4,6 +4,7 @@ import 'package:chess/chess.dart' as chess;
 import 'package:flutter_slchess/core/models/match.dart';
 import 'package:flutter_slchess/core/models/gamestate_model.dart';
 import 'package:flutter_slchess/core/services/matchmaking_service.dart';
+import 'package:flutter_slchess/core/services/match_ws_service.dart';
 import 'package:flutter_slchess/core/services/cognito_auth_service.dart';
 import '../widgets/error_dialog.dart';
 
@@ -15,8 +16,16 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 
 class Chessboard extends StatefulWidget {
   // final Game game;
-  final MatchModel match;
-  const Chessboard({super.key, required this.match});
+  final MatchModel matchModel;
+  final bool isOnline;
+  final bool isWhite;
+  final bool enableSwitchBoard;
+  const Chessboard(
+      {super.key,
+      required this.matchModel,
+      required this.isOnline,
+      required this.isWhite,
+      this.enableSwitchBoard = false});
   @override
   State<Chessboard> createState() => _ChessboardState();
 }
@@ -50,27 +59,27 @@ class _ChessboardState extends State<Chessboard> {
 
   // Websocket server
   CognitoAuth cognitoAuth = CognitoAuth();
-  late MatchModel match;
-  late WebSocketChannel channel;
+  late MatchWebsocketService matchService;
+  late MatchModel matchModel;
 
   @override
   void initState() {
     super.initState();
-    match = widget.match;
-    isWhite = match.isWhite;
-    isOnline = match.isOnline;
-    timeControl = match.gameMode.split("+")[0];
-    timeIncrement = int.parse(match.gameMode.split("+")[1]);
-    server = match.server;
+    matchModel = widget.matchModel;
+    isWhite = widget.isWhite;
+    isOnline = widget.isOnline;
+    timeControl = matchModel.gameMode.split("+")[0];
+    timeIncrement = int.parse(matchModel.gameMode.split("+")[1]);
+    server = matchModel.server;
 
     whiteTime = int.parse(timeControl) * 60 * 1000;
     blackTime = whiteTime;
 
-    fen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
-    listFen.add(fen);
-    game.load(fen);
-
-    board = parseFEN(listFen.last);
+    if (isOnline) {
+      _initializeGameOnlineGame();
+    } else {
+      _initializeGameOfflineGame();
+    }
 
     _stopwatch = Stopwatch();
     _scrollController = ScrollController(); // Khởi tạo ScrollController
@@ -82,16 +91,16 @@ class _ChessboardState extends State<Chessboard> {
     timer = Timer.periodic(const Duration(milliseconds: 100), (Timer t) {
       if (!_stopwatch.isRunning) return;
       final elapsed = _stopwatch.elapsedMilliseconds;
-      _stopwatch.reset(); // Reset sau mỗi lần tính toán
+      _stopwatch.reset();
       _stopwatch.start();
       setState(() {
         if (isWhiteTurn) {
-          if (halfmove > 0) {
+          if (halfmove > 0 || isOnline) {
             whiteTime -= elapsed;
             if (whiteTime <= 0) {
               whiteTime = 0;
               t.cancel();
-              print("White time out!");
+              // print("White time out!");
               showGameEndDialog(context, "White loss", "onTime");
             }
           }
@@ -100,50 +109,58 @@ class _ChessboardState extends State<Chessboard> {
           if (blackTime <= 0) {
             blackTime = 0;
             t.cancel();
-            print("Black time out!");
+            // print("Black time out!");
             showGameEndDialog(context, "Black loss", "onTime");
           }
         }
       });
     });
-
-    _initializeGame();
   }
 
-  Future<void> _initializeGame() async {
-    if (isOnline) {
-      String? storedIdToken = await cognitoAuth.getStoredIdToken();
-      print(storedIdToken!.length);
-      channel =
-          MatchMakingSerice.startGame(match.matchId, storedIdToken, server);
+  Future<void> _initializeGameOfflineGame() async {
+    const fen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+    listFen.add(fen);
+    game.load(fen);
 
-      channel.stream.listen(
-        (message) {
-          final data = jsonDecode(message);
+    board = parseFEN(listFen.last);
+  }
 
-          if (data['type'] == "gameState") {
-            GameStateModel gameStateModel =
-                GameStateModel.fromJson(data as Map<String, dynamic>);
+  Future<void> _initializeGameOnlineGame() async {
+    board =
+        parseFEN('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1');
 
-            fen = data['game']['fen'];
-            listFen.add(fen);
-            board = parseFEN(fen);
-            game.load(fen);
+    String? storedIdToken = await cognitoAuth.getStoredIdToken();
+    print(storedIdToken!.length);
+    matchService = MatchWebsocketService.startGame(
+        matchModel.matchId, storedIdToken, server);
 
-            whiteTime = gameStateModel.clocks[0];
-            blackTime = gameStateModel.clocks[1];
-
-            isWhiteTurn = game.turn.name == "WHITE" ? true : false;
-          }
-        },
-        onError: (error) => print("WebSocket Error: $error"),
-        onDone: () {
-          print(
-              "WebSocket closed (Code: ${channel.closeCode}, Reason: ${channel.closeReason})");
-          // showGameEndDialog(context, "", channel.closeReason ?? "");
-        },
-      );
-    }
+    matchService.listen(
+      onGameState: (gameState) {
+        print("Game state updated! $gameState");
+        fen = gameState.fen;
+        listFen.add(fen);
+        board = parseFEN(fen);
+        game.load(fen);
+        whiteTime = gameState.clocks[0];
+        blackTime = gameState.clocks[1];
+        isWhiteTurn = game.turn.name == "WHITE";
+      },
+      onEndgame: (gameState) {
+        print("Game has ended!");
+        final winner = gameState.outcome == "1-0"
+            ? "WHITE"
+            : gameState.outcome == "0-1"
+                ? "WINNER"
+                : null;
+        showGameEndDialog(context, "$winner WON", gameState.method);
+        // Hiển thị dialog hoặc thông báo kết thúc game.
+      },
+      onStatusChange: () {
+        print("Player status changed!");
+        // Cập nhật UI khi trạng thái người chơi thay đổi.
+      },
+      context: context, // Cần truyền BuildContext để hiển thị Dialog
+    );
   }
 
   void _scrollToBottomAfterBuild() {
@@ -198,23 +215,17 @@ class _ChessboardState extends State<Chessboard> {
       body: Column(
         children: [
           gameHistory(game),
-
           playerWidget(
-              playerName: match.player2.user.username,
-              // playerName: match.player2.id,
+              playerName: matchModel.player2.user.username,
               timeRemaining: formatTime(
                   blackTime)), // Hiển thị thời gian còn lại cho bên đen
           handleChessBoard(),
           playerWidget(
-              playerName: match.player1.user.username,
-              // playerName: match.player2.id,
+              playerName: matchModel.player1.user.username,
               timeRemaining: formatTime(
                   whiteTime)), // Hiển thị thời gian còn lại cho bên trắng
         ],
       ),
-
-      // Thêm footer với các tùy chọn
-
       bottomNavigationBar: BottomAppBar(
         color: const Color(0xFF282F33),
         child: Row(
@@ -416,12 +427,6 @@ class _ChessboardState extends State<Chessboard> {
   }
 
   void _handleMove(String coor) {
-    print("coor: $coor");
-    print(halfmove);
-    print(listFen.length);
-
-    print(isWhiteTurn);
-    print(isWhite);
     // Kiểm tra điều kiện halfmove
     if (whiteTime <= 0) {
       print("White time out!");
@@ -467,7 +472,7 @@ class _ChessboardState extends State<Chessboard> {
           print("Game halfmove: $halfmove, $sanMove");
 
           if (isOnline) {
-            MatchMakingSerice.makeMove(sanMove, channel);
+            matchService.makeMove(sanMove);
           }
           // Đổi lượt
           isWhiteTurn = !isWhiteTurn;
@@ -650,7 +655,8 @@ class _ChessboardState extends State<Chessboard> {
     required String playerName,
     required String timeRemaining,
   }) {
-    return Container(
+    return Expanded(
+        child: Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: const BoxDecoration(
         color: Colors.black87,
@@ -701,7 +707,7 @@ class _ChessboardState extends State<Chessboard> {
           ),
         ],
       ),
-    );
+    ));
   }
 
   /// Hàm parseFEN: chuyển chuỗi FEN thành mảng 2 chiều 8x8
@@ -927,8 +933,10 @@ class _ChessboardState extends State<Chessboard> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
-                    _buildButton(context, "Tái đấu"),
-                    _buildButton(context, "Ván cờ mới"),
+                    _buildButton(
+                        context, "Tái đấu", () => Navigator.of(context).pop()),
+                    _buildButton(context, "Ván cờ mới",
+                        () => Navigator.of(context).pop()),
                   ],
                 ),
               ],
@@ -961,14 +969,9 @@ class _ChessboardState extends State<Chessboard> {
   }
 
 // Hàm tạo nút bấm
-
-  Widget _buildButton(BuildContext context, String text) {
+  Widget _buildButton(BuildContext context, String text, VoidCallback onPress) {
     return ElevatedButton(
-      onPressed: () {
-        Navigator.of(context).pop();
-
-        // Xử lý logic tái đấu hoặc ván mới tại đây
-      },
+      onPressed: onPress,
       style: ElevatedButton.styleFrom(
         backgroundColor: Colors.grey[300],
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -1004,6 +1007,8 @@ class _ChessboardState extends State<Chessboard> {
             children: [
               _buildMenuItem(context, Icons.flag, "Chấp nhận thua", () {
                 Navigator.pop(context);
+
+                matchService.resign();
                 // Xử lý logic đầu hàng ở đây
               }),
               _buildMenuItem(context, Icons.sync_disabled,

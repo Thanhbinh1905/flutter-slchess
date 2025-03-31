@@ -3,6 +3,7 @@ import '../services/matchmaking_service.dart';
 import '../services/cognito_auth_service.dart';
 import '../services/userService.dart';
 import '../models/user.dart';
+import '../models/chessboard_model.dart';
 import '../models/match.dart';
 
 class MatchMakingScreen extends StatefulWidget {
@@ -17,13 +18,12 @@ class _MatchMakingScreenState extends State<MatchMakingScreen> {
   late String gameMode;
   bool isQueued = false;
 
-  MatchMakingSerice matchMakingSerice = MatchMakingSerice();
-  CognitoAuth cognitoAuth = CognitoAuth();
-  UserService userService = UserService();
-  MatchMakingSerice matchMakingService = MatchMakingSerice();
+  final MatchMakingSerice matchMakingService = MatchMakingSerice();
+  final CognitoAuth cognitoAuth = CognitoAuth();
+  final UserService userService = UserService();
 
   late UserModel? player;
-  late MatchModel? match;
+  late ChessboardModel chessboardModel;
 
   @override
   void initState() {
@@ -34,7 +34,6 @@ class _MatchMakingScreenState extends State<MatchMakingScreen> {
 
   Future<void> _initializeMatchmaking() async {
     try {
-      // Kiểm tra token không null
       final String? storedIdToken = await cognitoAuth.getStoredIdToken();
       if (storedIdToken == null) {
         if (mounted) {
@@ -45,7 +44,6 @@ class _MatchMakingScreenState extends State<MatchMakingScreen> {
         return;
       }
 
-      // Kiểm tra player không null
       player = await userService.getPlayer();
       if (player == null || !mounted) {
         print("Người chơi không tồn tại hoặc widget đã bị dispose");
@@ -54,30 +52,33 @@ class _MatchMakingScreenState extends State<MatchMakingScreen> {
 
       final double playerRating = player!.rating;
 
-      do {
+      // Tìm trận đấu
+      MatchModel? match;
+      while (match == null && mounted) {
         match = await matchMakingService.getQueue(
-          storedIdToken,
-          gameMode,
-          playerRating,
-        );
-        print("match == null : ${match == null}");
-        if (match == null && mounted) {
-          print("Không tìm thấy trận đấu, đang chờ...");
-          await Future.delayed(
-              const Duration(seconds: 2)); // Đợi 2 giây trước khi thử lại
+            storedIdToken, gameMode, playerRating);
+        if (match == null) {
+          await Future.delayed(const Duration(seconds: 2));
         }
-      } while (match == null && mounted);
+      }
 
-      // Cập nhật state chỉ khi widget còn tồn tại
-      setState(() {
-        isQueued = true;
-        match!
-          ..isOnline = true
-          ..isWhite = matchMakingService.isUserWhite(match!, player!);
-      });
+      if (!mounted) return;
 
-      // Chuyển trang
-      Navigator.popAndPushNamed(context, "/board", arguments: match);
+      // Tạo model bàn cờ
+      chessboardModel = ChessboardModel(
+        match: match!,
+        isOnline: true,
+        isWhite: matchMakingService.isUserWhite(match, player!),
+      );
+
+      if (mounted) {
+        setState(() {
+          isQueued = true;
+        });
+
+        Navigator.popAndPushNamed(context, "/board",
+            arguments: chessboardModel);
+      }
     } catch (e, stackTrace) {
       print("Lỗi khi khởi tạo matchmaking: $e\n$stackTrace");
       if (mounted) {
@@ -116,9 +117,8 @@ class _MatchMakingScreenState extends State<MatchMakingScreen> {
                     mainAxisSize: MainAxisSize.min,
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
-                      // Avatar User
                       ClipRRect(
-                        borderRadius: BorderRadius.circular(25), // Bo góc tròn
+                        borderRadius: BorderRadius.circular(25),
                         child: SizedBox(
                           width: 50,
                           height: 50,
@@ -129,7 +129,6 @@ class _MatchMakingScreenState extends State<MatchMakingScreen> {
                         ),
                       ),
                       const SizedBox(width: 10),
-
                       if (isQueued) ...[
                         const SizedBox(width: 10),
                         ClipRRect(
@@ -147,8 +146,6 @@ class _MatchMakingScreenState extends State<MatchMakingScreen> {
                       ] else
                         const CircularProgressIndicator(),
                       const SizedBox(width: 10),
-
-                      // Avatar Enemy
                       ClipRRect(
                         borderRadius: BorderRadius.circular(25),
                         child: SizedBox(
@@ -169,7 +166,7 @@ class _MatchMakingScreenState extends State<MatchMakingScreen> {
                   const SizedBox(height: 20),
                   ElevatedButton(
                       onPressed: () {
-                        Navigator.pop(context); // Quay lại trang trước
+                        Navigator.pop(context);
                       },
                       child: const Text("Quay lại")),
                 ],

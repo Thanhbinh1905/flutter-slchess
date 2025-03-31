@@ -3,6 +3,7 @@ import '../widgets/widgets.dart';
 import '../constants/constants.dart';
 import '../models/player.dart';
 import '../models/match.dart';
+import '../models/chessboard_model.dart';
 import '../models/user.dart';
 import '../widgets/error_dialog.dart';
 
@@ -113,24 +114,24 @@ class _OfflineGameScreenState extends State<OfflineGameScreen> {
                         return;
                       }
 
-                      Navigator.pushNamed(
-                        context,
-                        '/board_offline',
-                        arguments: MatchModel(
-                          matchId: "null",
-                          player1: Player(
-                              user: UserModel(
-                                  id: "null", username: whitePlayerName),
-                              rating: 1200),
-                          player2: Player(
-                              user: UserModel(
-                                  id: "null", username: blackPlayerName),
-                              rating: 1200),
-                          gameMode: selectedTimeControl,
-                          server: "null",
-                          createdAt: DateTime.now(),
-                        ),
-                      );
+                      Navigator.pushNamed(context, '/board',
+                          arguments: ChessboardModel(
+                              match: MatchModel(
+                                matchId: "null",
+                                player1: Player(
+                                    user: UserModel(
+                                        id: "null", username: whitePlayerName),
+                                    rating: 1200),
+                                player2: Player(
+                                    user: UserModel(
+                                        id: "null", username: blackPlayerName),
+                                    rating: 1200),
+                                gameMode: selectedTimeControl,
+                                server: "null",
+                                createdAt: DateTime.now(),
+                              ),
+                              isOnline: false,
+                              isWhite: true));
                     },
                     child: const Text(
                       "Chơi",

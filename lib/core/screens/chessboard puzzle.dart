@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'package:chess/chess.dart' as chess;
-import 'package:flutter_slchess/core/models/match.dart';
+import 'package:flutter_slchess/core/models/chessboard_model.dart';
 import 'package:flutter_slchess/core/services/matchmaking_service.dart';
 import 'package:flutter_slchess/core/services/cognito_auth_service.dart';
 
@@ -14,8 +14,8 @@ import 'package:web_socket_channel/io.dart';
 
 class ChessboardPuzzleScreen extends StatefulWidget {
   // final Game game;
-  final MatchModel match;
-  const ChessboardPuzzleScreen({super.key, required this.match});
+  final ChessboardModel chessboardModel;
+  const ChessboardPuzzleScreen({super.key, required this.chessboardModel});
   @override
   State<ChessboardPuzzleScreen> createState() => _ChessboardPuzzleScreenState();
 }
@@ -49,19 +49,23 @@ class _ChessboardPuzzleScreenState extends State<ChessboardPuzzleScreen> {
 
   // Websocket server
   CognitoAuth cognitoAuth = CognitoAuth();
-  late MatchModel match;
+  late ChessboardModel chessboardModel;
   late String? storedIdToken;
   late WebSocketChannel channel;
 
   @override
   void initState() {
     super.initState();
-    match = widget.match;
-    isWhite = match.isWhite;
-    isOnline = match.isOnline;
-    timeControl = match.gameMode.split("+")[0];
-    timeIncrement = int.parse(match.gameMode.split("+")[1]);
-    server = match.server;
+    isWhite = widget
+        .chessboardModel.isWhite; // Sửa đổi để lấy giá trị từ chessboardModel
+    isOnline = widget
+        .chessboardModel.isOnline; // Sửa đổi để lấy giá trị từ chessboardModel
+    timeControl = widget.chessboardModel.match.gameMode
+        .split("+")[0]; // Sửa đổi để lấy match từ chessboardModel
+    timeIncrement = int.parse(widget.chessboardModel.match.gameMode
+        .split("+")[1]); // Sửa đổi để lấy match từ chessboardModel
+    server = widget.chessboardModel.match
+        .server; // Sửa đổi để lấy match từ chessboardModel
 
     whiteTime = int.parse(timeControl) * 60 * 1000;
     blackTime = whiteTime;
@@ -112,8 +116,8 @@ class _ChessboardPuzzleScreenState extends State<ChessboardPuzzleScreen> {
   Future<void> _initializeGame() async {
     if (isOnline) {
       storedIdToken = await cognitoAuth.getStoredIdToken();
-      channel =
-          MatchMakingSerice.startGame(match.matchId, storedIdToken!, server);
+      channel = MatchMakingSerice.startGame(
+          widget.chessboardModel.match.matchId, storedIdToken!, server);
 
       channel.stream.listen(
         (message) {

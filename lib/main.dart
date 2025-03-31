@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:flutter_slchess/core/models/match.dart';
-import 'package:flutter_slchess/core/screens/chessboard_offline.dart';
+import 'package:flutter_slchess/core/models/chessboard_model.dart';
 import 'core/screens/login.dart';
 import 'core/screens/homescreen.dart';
 import 'core/screens/chessboard.dart';
@@ -34,16 +33,13 @@ class MyApp extends StatelessWidget {
       onGenerateRoute: (settings) {
         switch (settings.name) {
           case '/board':
-            // final game = settings.arguments as Game;
-            final match = settings.arguments as MatchModel;
+            final args = settings.arguments as ChessboardModel;
             return MaterialPageRoute(
-              builder: (context) => Chessboard(match: match),
-            );
-          case '/board_offline':
-            // final game = settings.arguments as Game;
-            final match = settings.arguments as MatchModel;
-            return MaterialPageRoute(
-              builder: (context) => ChessboardOffline(match: match),
+              builder: (context) => Chessboard(
+                matchModel: args.match,
+                isOnline: args.isOnline,
+                isWhite: args.isWhite,
+              ),
             );
           case '/login':
             return MaterialPageRoute(builder: (context) => const LoginScreen());

@@ -4,12 +4,12 @@ import 'package:web_socket_channel/io.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 
-class MatchService {
+class MatchWebsocketService {
   final WebSocketChannel channel;
 
-  MatchService._(this.channel);
+  MatchWebsocketService._(this.channel);
 
-  factory MatchService.startGame(
+  factory MatchWebsocketService.startGame(
       String matchId, String idToken, String server) {
     final channel = IOWebSocketChannel.connect(
       Uri.parse("ws://$server:7202/game/$matchId"),
@@ -18,12 +18,12 @@ class MatchService {
         'Authorization': idToken,
       },
     );
-    return MatchService._(channel);
+    return MatchWebsocketService._(channel);
   }
 
   void listen(
       {void Function(GameStateModel gameState)? onGameState,
-      void Function()? onEndgame,
+      void Function(GameStateModel gameState)? onEndgame,
       void Function()? onStatusChange,
       required BuildContext context}) {
     // Thêm BuildContext vào tham số
@@ -31,14 +31,15 @@ class MatchService {
       (message) {
         try {
           final data = jsonDecode(message);
-
+          print(data['type'] == "drawOffer");
           if (data['type'] == "gameState") {
             GameStateModel gameStateModel = GameStateModel.fromJson(data);
             if (gameStateModel.outcome != "*") {
-              onEndgame?.call();
+              onEndgame?.call(gameStateModel);
             }
             onGameState?.call(gameStateModel);
           } else if (data['type'] == "drawOffer") {
+            print("opponent offer a draw");
             _showDrawOfferDialog(context); // Hiện dialog khi có đề nghị hòa
           } else if (data['type'] == "playerStatus") {
             onStatusChange?.call();
@@ -116,7 +117,7 @@ class MatchService {
 
   void acceptDraw() {
     print("Người chơi đã chấp nhận hòa");
-    _sendGameData({"action": "acceptDraw"});
+    _sendGameData({"action": "offerDraw"});
   }
 
   void declineDraw() {

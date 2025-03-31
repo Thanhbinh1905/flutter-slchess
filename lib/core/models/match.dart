@@ -7,9 +7,6 @@ class MatchModel {
   final String gameMode;
   final String server;
   final DateTime createdAt;
-  bool isOnline;
-  bool isWhite;
-  bool enableSwitchBoard;
 
   MatchModel({
     required this.matchId,
@@ -18,9 +15,6 @@ class MatchModel {
     required this.gameMode,
     required this.server,
     required this.createdAt,
-    this.isOnline = false,
-    this.isWhite = true,
-    this.enableSwitchBoard = false,
   });
 
   static Future<MatchModel> fromJson(Map<String, dynamic> json) async {
