@@ -1,6 +1,8 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_slchess/core/models/chessboard_model.dart';
+import 'package:flutter_slchess/core/services/cognito_auth_service.dart';
 import 'core/screens/login.dart';
 import 'core/screens/homescreen.dart';
 import 'core/screens/chessboard.dart';
@@ -10,15 +12,22 @@ import 'core/screens/matchmaking.dart';
 final navigatorKey = GlobalKey<NavigatorState>();
 
 Future<void> main() async {
-  // Đảm bảo binding được khởi tạo
   WidgetsFlutterBinding.ensureInitialized();
+  await dotenv.load(fileName: ".env");
 
-  // Đảm bảo các plugin được load trước khi chạy app
-  await Future.wait([
-    dotenv.load(fileName: ".env"),
-  ]);
+  // if (kIsWeb) {
+  //   await handleWebCallback(); // Chờ xử lý callback trước khi chạy app
+  // }
 
   runApp(const MyApp());
+}
+
+Future<void> handleWebCallback() async {
+  final uri = Uri.base;
+  final code = uri.queryParameters['code'];
+  if (code != null) {
+    await CognitoAuth().getToken(code); // Đợi lấy token xong
+  }
 }
 
 class MyApp extends StatelessWidget {

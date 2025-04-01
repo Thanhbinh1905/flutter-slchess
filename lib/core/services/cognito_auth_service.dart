@@ -17,7 +17,7 @@ class CognitoAuth {
   final cognitoUrl = dotenv.env['COGNITO_URL'];
   final cognitoClientId = dotenv.env['COGNITO_CLIENT_ID'];
   final redirectUri =
-      kIsWeb ? 'https://your-web-app.com/callback' : 'slchess://callback';
+      kIsWeb ? '${Uri.base.origin}/callback' : 'slchess://callback';
 
   // Các key để lưu token
   static const String ACCESS_TOKEN_KEY = "ACCESS_TOKEN";
@@ -55,13 +55,14 @@ class CognitoAuth {
   }
 
   Future<void> handleLogin() async {
+    print(redirectUri);
     try {
       final url = Uri.https(
         cognitoUrl!,
         'login',
         {
           'client_id': cognitoClientId,
-          'redirect_uri': 'slchess://callback',
+          'redirect_uri': redirectUri,
           'response_type': 'code',
           'scope': 'email openid phone',
         },
@@ -73,8 +74,6 @@ class CognitoAuth {
     }
   }
 
-  // Future<void> resetToken
-
   Future<void> getToken(String code) async {
     try {
       final tokenResponse = await http.post(
@@ -84,9 +83,11 @@ class CognitoAuth {
           'grant_type': 'authorization_code',
           'client_id': cognitoClientId,
           'code': code,
-          'redirect_uri': 'slchess://callback',
+          'redirect_uri': redirectUri,
         },
       );
+
+      print(tokenResponse);
 
       if (tokenResponse.statusCode == 200) {
         final tokens = json.decode(tokenResponse.body);
