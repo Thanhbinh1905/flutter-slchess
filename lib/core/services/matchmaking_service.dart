@@ -139,7 +139,6 @@ class MatchMakingSerice {
       {int minRating = 0, int maxRating = 100}) async {
     minRating = minRating == 0 ? (rating - 50).toInt() : minRating;
     maxRating = maxRating == 100 ? (rating + 50).toInt() : maxRating;
-
     try {
       final response = await http.post(
         Uri.parse(_matchMakingApiUrl),
@@ -153,6 +152,8 @@ class MatchMakingSerice {
           "gameMode": gameMode
         }),
       );
+
+      print(response);
 
       if (response.statusCode == 200) {
         try {
