@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:app_links/app_links.dart';
 import 'package:http/http.dart' as http;
@@ -15,6 +16,8 @@ class CognitoAuth {
 
   final cognitoUrl = dotenv.env['COGNITO_URL'];
   final cognitoClientId = dotenv.env['COGNITO_CLIENT_ID'];
+  final redirectUri =
+      kIsWeb ? 'https://your-web-app.com/callback' : 'slchess://callback';
 
   // Các key để lưu token
   static const String ACCESS_TOKEN_KEY = "ACCESS_TOKEN";
