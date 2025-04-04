@@ -1,4 +1,4 @@
-import './match.dart';
+import 'match_model.dart';
 
 class ChessboardModel {
   final MatchModel match;

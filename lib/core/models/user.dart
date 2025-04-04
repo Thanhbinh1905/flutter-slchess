@@ -1,12 +1,36 @@
-enum Membership { guest, premium }
+import 'package:hive/hive.dart';
 
+part 'user.g.dart';
+
+@HiveType(typeId: 1)
+enum Membership {
+  @HiveField(0)
+  guest,
+  @HiveField(1)
+  premium
+}
+
+@HiveType(typeId: 2)
 class UserModel {
+  @HiveField(0)
   final String id;
+
+  @HiveField(1)
   final String username;
+
+  @HiveField(2)
   String locate;
+
+  @HiveField(3)
   String picture;
+
+  @HiveField(4)
   double rating;
+
+  @HiveField(5)
   Membership membership;
+
+  @HiveField(6)
   DateTime createAt;
 
   UserModel({

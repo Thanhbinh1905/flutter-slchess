@@ -4,7 +4,7 @@ import '../services/cognito_auth_service.dart';
 import '../services/userService.dart';
 import '../models/user.dart';
 import '../models/chessboard_model.dart';
-import '../models/match.dart';
+import '../models/match_model.dart';
 
 class MatchMakingScreen extends StatefulWidget {
   final String gameMode;

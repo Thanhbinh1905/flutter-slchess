@@ -8,6 +8,12 @@ class ApiConstants {
 
   static String get getSelfUserInfoUrl =>
       "https://slchess-dev.auth.ap-southeast-2.amazoncognito.com/oauth2/userInfo";
+  static String get getUploadImageUrl =>
+      "https://$identifier.execute-api.ap-southeast-2.amazonaws.com/dev/avatar/upload";
+  static String get getPulzzesUrl =>
+      "https://$identifier.execute-api.ap-southeast-2.amazonaws.com/dev/puzzles";
+  static String get getPulzzeUrl =>
+      "https://$identifier.execute-api.ap-southeast-2.amazonaws.com/dev/puzzle";
 }
 
 class WebsocketConstants {

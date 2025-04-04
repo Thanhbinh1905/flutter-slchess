@@ -1,19 +1,31 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_slchess/core/models/chessboard_model.dart';
 import 'package:flutter_slchess/core/services/cognito_auth_service.dart';
-import 'core/screens/login.dart';
+import 'package:hive/hive.dart';
+import 'package:hive_flutter/hive_flutter.dart';
+import 'package:flutter_slchess/core/models/puzzle_model.dart';
+import 'core/screens/login_screen.dart';
 import 'core/screens/homescreen.dart';
 import 'core/screens/chessboard.dart';
 import 'core/screens/offline_game.dart';
 import 'core/screens/matchmaking.dart';
+import 'core/screens/upload_image_screen.dart';
+import 'core/screens/user_profile_screen.dart';
+import 'core/screens/puzzle_chessboard.dart';
+import 'core/models/user.dart';
 
 final navigatorKey = GlobalKey<NavigatorState>();
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load(fileName: ".env");
+
+  // Khởi tạo Hive và đăng ký adapter
+  await Hive.initFlutter();
+  Hive.registerAdapter(PuzzleAdapter());
+  Hive.registerAdapter(UserModelAdapter());
+  Hive.registerAdapter(MembershipAdapter());
 
   // if (kIsWeb) {
   //   await handleWebCallback(); // Chờ xử lý callback trước khi chạy app
@@ -57,10 +69,36 @@ class MyApp extends StatelessWidget {
                 builder: (context) => const OfflineGameScreen());
           case '/home':
             return MaterialPageRoute(builder: (context) => const HomeScreen());
+          case '/uploadImage':
+            return MaterialPageRoute(
+                builder: (context) => const UploadImageScreen());
           case '/matchmaking':
             final gameMode = settings.arguments as String;
             return MaterialPageRoute(
                 builder: (context) => MatchMakingScreen(gameMode: gameMode));
+          case '/profile':
+            return MaterialPageRoute(
+                builder: (context) => const UserProfileScreen());
+          case '/puzzle_board':
+            // Kiểm tra null trước khi ép kiểu
+            final args = settings.arguments;
+            if (args is Map<String, dynamic>) {
+              return MaterialPageRoute(
+                builder: (context) => PuzzleChessboard(
+                  puzzle: args['puzzle'],
+                  idToken: args['idToken'],
+                ),
+              );
+            } else {
+              print("Lỗi: Tham số truyền vào không đúng định dạng: $args");
+              return MaterialPageRoute(
+                builder: (context) => const Scaffold(
+                  body: Center(
+                    child: Text('Lỗi: Không thể tải puzzle'),
+                  ),
+                ),
+              );
+            }
           default:
             return MaterialPageRoute(builder: (context) => const HomeScreen());
         }

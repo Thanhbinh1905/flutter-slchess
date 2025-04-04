@@ -1,13 +1,16 @@
 import 'dart:convert';
 import '../models/user.dart';
 import 'package:http/http.dart' as http;
-import 'dart:convert'; // Để sử dụng jsonEncode
 import '../constants/constants.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:hive/hive.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 
 class UserService {
   static String getUserApiUrl = ApiConstants.getUserInfo;
   static String getSelfUserApiUrl = ApiConstants.getSelfUserInfoUrl;
+  static String updateRatingUrl = ApiConstants.getSelfUserInfoUrl;
+
+  static const String USER_BOX = 'userBox';
 
   Future<UserModel> getUserInfo(String userId, String idToken) async {
     try {
@@ -16,53 +19,125 @@ class UserService {
       if (response.statusCode == 200) {
         return UserModel.fromJson(jsonDecode(response.body));
       } else {
+        print("API lỗi: ${response.statusCode}, Body: ${response.body}");
         throw Exception('Failed to load user info: ${response.statusCode}');
       }
     } catch (e) {
       print("Error when getting user info: $e");
       throw Exception('Error when getting user info');
+    }
+  }
+
+  Future<void> updateRating(
+      String userId, double newRating, String idToken) async {
+    try {
+      final response = await http.put(
+        Uri.parse("$updateRatingUrl/$userId"),
+        headers: {
+          'Authorization': idToken,
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({'rating': newRating}),
+      );
+
+      if (response.statusCode != 200) {
+        throw Exception('Failed to update rating: ${response.statusCode}');
+      }
+
+      // Cập nhật thông tin user trong Hive
+      UserModel updatedUser = await getUserInfo(userId, idToken);
+      await savePlayer(updatedUser);
+    } catch (e) {
+      print("Error when updating rating: $e");
+      throw Exception('Error when updating rating');
     }
   }
 
   Future<void> saveSelfUserInfo(String accessToken, String idToken) async {
     try {
+      // Đảm bảo box được khởi tạo trước khi sử dụng
+      if (!Hive.isBoxOpen(USER_BOX)) {
+        await Hive.openBox<UserModel>(USER_BOX);
+      }
+
       final response = await http.get(
         Uri.parse(getSelfUserApiUrl),
         headers: {'Authorization': 'Bearer $accessToken'},
       );
 
+      print(
+          "Self info response: ${response.statusCode}, body: ${response.body}");
+
       if (response.statusCode == 200) {
         String userId = jsonDecode(response.body)['sub'];
-        UserModel user =
-            await getUserInfo(userId, idToken); // ⚠️ `await` để lấy UserModel
-        await savePlayer(user); // Lưu user vào SharedPreferences
+        UserModel user = await getUserInfo(userId, idToken);
+        print("User data: ${user.toJson()}");
+        await savePlayer(user);
       } else {
         throw Exception('Failed to load user info: ${response.statusCode}');
       }
     } catch (e) {
       print("Error when getting user info: $e");
-      throw Exception('Error when getting user info');
+      throw Exception('Error when getting user info: $e');
     }
   }
 
   Future<void> savePlayer(UserModel player) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('player', jsonEncode(player.toJson()));
+    try {
+      if (!Hive.isBoxOpen(USER_BOX)) {
+        await Hive.openBox<UserModel>(USER_BOX);
+      }
+
+      final box = await Hive.openBox<UserModel>(USER_BOX);
+      await box.put('currentPlayer', player);
+      print("Player saved successfully: ${player.username}");
+    } catch (e) {
+      print("Error saving player to Hive: $e");
+      throw Exception('Error saving player data: $e');
+    }
   }
 
   Future<UserModel?> getPlayer() async {
-    final prefs = await SharedPreferences.getInstance();
-    String? playerData = prefs.getString('player');
-    if (playerData == null) return null;
-    return UserModel.fromJson(jsonDecode(playerData));
+    try {
+      if (!Hive.isBoxOpen(USER_BOX)) {
+        await Hive.openBox<UserModel>(USER_BOX);
+      }
+
+      final box = await Hive.openBox<UserModel>(USER_BOX);
+      UserModel? user = box.get('currentPlayer');
+      if (user != null) {
+        print("Retrieved user: ${user.username}");
+      } else {
+        print("No user found in Hive box");
+      }
+      return user;
+    } catch (e) {
+      print("Error retrieving player from Hive: $e");
+      return null;
+    }
+  }
+
+  // Xóa thông tin người dùng - hữu ích khi đăng xuất
+  Future<void> clearUserData() async {
+    try {
+      if (!Hive.isBoxOpen(USER_BOX)) {
+        await Hive.openBox<UserModel>(USER_BOX);
+      }
+
+      final box = await Hive.openBox<UserModel>(USER_BOX);
+      await box.delete('currentPlayer');
+      print("User data cleared");
+    } catch (e) {
+      print("Error clearing user data: $e");
+    }
   }
 }
 
 void main() async {
   const String accessToken =
-      "eyJraWQiOiJPQ0xsdWJsUFIzM3hiblNiakFuQmx5elNSeURvUUpTcEx1TUJtWWlVQ1pNPSIsImFsZyI6IlJTMjU2In0.eyJzdWIiOiI4OWNlNTQ0OC0wMDkxLTcwYzgtNTExZi0zZWUzNjBiNmE0ZjAiLCJpc3MiOiJodHRwczpcL1wvY29nbml0by1pZHAuYXAtc291dGhlYXN0LTIuYW1hem9uYXdzLmNvbVwvYXAtc291dGhlYXN0LTJfS0l1anF3UzZuIiwidmVyc2lvbiI6MiwiY2xpZW50X2lkIjoiNG1oc2VyOG9xcDdrazlxYzJxdG1ldDRkdDAiLCJvcmlnaW5fanRpIjoiOWE3NjE3OGUtZmY5Yi00MzYyLTk5YzEtNjc4M2QyNGMyMTljIiwiZXZlbnRfaWQiOiI4ZDgwNmI3Ny1lYmExLTQ2NDAtYjg3OS0wMDAwY2I4ZGJlMzgiLCJ0b2tlbl91c2UiOiJhY2Nlc3MiLCJzY29wZSI6InBob25lIG9wZW5pZCBwcm9maWxlIGVtYWlsIiwiYXV0aF90aW1lIjoxNzQyODEyMjg4LCJleHAiOjE3NDI4OTg2ODgsImlhdCI6MTc0MjgxMjI4OCwianRpIjoiNTRhN2NmOGQtZjNiOS00ZThiLTk3MTctMmUxNTQ0MjM0MTU3IiwidXNlcm5hbWUiOiJ0ZXN0dXNlcjEifQ.ZEkktcmVPpQqpEZohPIuwRrLy0VZu3lQywRSz4O-FwqrdKySw33qrRuWYKpz4Q_ODCtELASSRPFQ0WNLWTdvWJf68BikZqXUKmFop_GPaosAX9FF8TqY2_UTb-0Uwx4AkwL0HrWEbpGzTuOiXpxbmG4WdbMms0H11qu_Rit9LrSpUmjQ3bffCJHKL5s7XqWlBXfk6YxJKNA5pdScCqqVghBhtFAm83_GTMgX8lnjfPqOICUajismwSUOOJi9PmZaOsRcHdOIrSrx2OpYuQvJb62ZUKg1R82m_ZT4HGXYDJoFgukgssXWGINkV2j4AhiZk7OgG4-FvyofukUEz6F-GA";
+      "eyJraWQiOiJkRXlGcVFoZUNBQnlOVzlpRWFIdFpKUUM0XC9OZXJrbU9aQUJWYzJpcHdUTT0iLCJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJhOThlMzQxOC1iMDkxLTcwNzMtZGNhYS1mMGQ0ZmFiNGFjMTciLCJpc3MiOiJodHRwczpcL1wvY29nbml0by1pZHAuYXAtc291dGhlYXN0LTIuYW1hem9uYXdzLmNvbVwvYXAtc291dGhlYXN0LTJfYm5rSExrNEl5IiwidmVyc2lvbiI6MiwiY2xpZW50X2lkIjoiYTc0Mmtpa2ludWdydW1oMTgzbWhqYTduZiIsIm9yaWdpbl9qdGkiOiIyYzJjN2FmZC1mODA0LTQxZTEtOGNiOC1mMmZlMGUwYjQ2MzMiLCJ0b2tlbl91c2UiOiJhY2Nlc3MiLCJzY29wZSI6InBob25lIG9wZW5pZCBwcm9maWxlIGVtYWlsIiwiYXV0aF90aW1lIjoxNzQzNzY2OTgwLCJleHAiOjE3NDM4NTMzODAsImlhdCI6MTc0Mzc2Njk4MCwianRpIjoiZGFiMjBjMjYtMmFkNy00YWI4LWIxZjYtZTY0OTVjZjdlYTJmIiwidXNlcm5hbWUiOiJ0ZXN0dXNlcjIifQ.IYqSY0iSqhNSMzsoffxC8IsGZrqD67f2ScCeEhjwZlV2iI_yqEUOqFcIJKKwjfPO3x5Bp_83Sx5qbuYkonjgpTw4YUQH3ZO0Vgw0FlzZyIizDm2RuMb0Bchp9Ay83WGdBSoIsuMGruyRwUkOreNo5xCZnP9gQgPw8Jglanr7q_Eh-Xv6iwxeCX1ThHI-hozcKtAIB-sBrbuUcVUWnXHyCpvbLX9ArlGUOk21Sgz0Qs9sOjnivlqM9SiOYZYo25s7nyltJHngmlb1piyBni83Ts0hKWtJDSaKmBEezXWoN3qGpzVcfYDCNdTSI8FeXr1y1szSzsIGuNSVbKBzxndL5g";
   const String idToken =
-      "eyJraWQiOiI1WEhKMERESVlOQ2ZRbE9BVU1sWTNsQ2F4bklaYTZ3cHV6Zk5UclhGQlE0PSIsImFsZyI6IlJTMjU2In0.eyJhdF9oYXNoIjoiZ0F4akppZ24wTUgzZTFVbzhwYXo3USIsInN1YiI6Ijg5Y2U1NDQ4LTAwOTEtNzBjOC01MTFmLTNlZTM2MGI2YTRmMCIsImVtYWlsX3ZlcmlmaWVkIjpmYWxzZSwiaXNzIjoiaHR0cHM6XC9cL2NvZ25pdG8taWRwLmFwLXNvdXRoZWFzdC0yLmFtYXpvbmF3cy5jb21cL2FwLXNvdXRoZWFzdC0yX0tJdWpxd1M2biIsImNvZ25pdG86dXNlcm5hbWUiOiJ0ZXN0dXNlcjEiLCJvcmlnaW5fanRpIjoiOWE3NjE3OGUtZmY5Yi00MzYyLTk5YzEtNjc4M2QyNGMyMTljIiwiYXVkIjoiNG1oc2VyOG9xcDdrazlxYzJxdG1ldDRkdDAiLCJldmVudF9pZCI6IjhkODA2Yjc3LWViYTEtNDY0MC1iODc5LTAwMDBjYjhkYmUzOCIsInRva2VuX3VzZSI6ImlkIiwiYXV0aF90aW1lIjoxNzQyODEyMjg4LCJleHAiOjE3NDI4OTg2ODgsImlhdCI6MTc0MjgxMjI4OCwianRpIjoiOTM3NWZkNGUtNjllMi00MjUzLWJhYzctMzBiODk4OGQzODg1IiwiZW1haWwiOiJ0ZXN0dXNlcjFAZ21haWwuY29tIn0.ofS9_lPGarBckQ0mEGZhYEF1BHeZZ4Bq5D2r_-Jwq0QwFoXR6F10zgtTl5n6CR0570NcRQcVFW814Kqs5Ktkz-oULVfKCKVh6YMXdw5P5MCekHSTQJ1vU3v8_vqTL1dcFMk3EcsUAYcoetce6_ucneaPinVz3Ld6OUL4TT9KiPDJo7M-pez_zzqLzE3JF3zbrPuHqV6L9xqsrSOgtHMgrkPp7lorhE0YeK5T8sWCcEmUDb5kFsRIfl7_-2X6qrvDq2umnM0s6tkRaCRHAprXl5FwBxPdO1lf1UCds2fROC3--JcS_xT3N3wRiZXBTPi9Z5wcgiwBp1zDJRCWX8SVmw";
+      "eyJraWQiOiJcL3I1OU5BYWtWakc0VWtwaFlFcHNlSHZ0bThkaDQyYlJPMFprcU5IV1Uxaz0iLCJhbGciOiJSUzI1NiJ9.eyJhdF9oYXNoIjoiUWNPUjVtWXJRczNxcTM0ZGtXQTY3QSIsInN1YiI6ImE5OGUzNDE4LWIwOTEtNzA3My1kY2FhLWYwZDRmYWI0YWMxNyIsImVtYWlsX3ZlcmlmaWVkIjpmYWxzZSwiaXNzIjoiaHR0cHM6XC9cL2NvZ25pdG8taWRwLmFwLXNvdXRoZWFzdC0yLmFtYXpvbmF3cy5jb21cL2FwLXNvdXRoZWFzdC0yX2Jua0hMazRJeSIsImNvZ25pdG86dXNlcm5hbWUiOiJ0ZXN0dXNlcjIiLCJvcmlnaW5fanRpIjoiMmMyYzdhZmQtZjgwNC00MWUxLThjYjgtZjJmZTBlMGI0NjMzIiwiYXVkIjoiYTc0Mmtpa2ludWdydW1oMTgzbWhqYTduZiIsInRva2VuX3VzZSI6ImlkIiwiYXV0aF90aW1lIjoxNzQzNzY2OTgwLCJleHAiOjE3NDM4NTMzODAsImlhdCI6MTc0Mzc2Njk4MCwianRpIjoiOTllN2E0NzAtMDEwZC00ZTE3LWI2Y2ItNmEyNWE3YzAyZjI4IiwiZW1haWwiOiJ0ZXN0dXNlcjJAZ21haWwuY29tIn0.xs0v7orUyWKHnvO9q7WlB2_wrmcH6FV5VEt9sijdODWLAFgdsADkdn11IZI9wnj_lsQm4-669o7A7Fc8fe5xpALuQGvFVl_bPf_7cGi0M0jEyt51zVnyRgB8EiFSm727_DRDskFQrnYxuicVbnr3vkzP1JFD6YRipjutwa_gG3B1xdVsgl280N0p9x1l26TdrhUAP_RRLjZSWmyk0bSWRS_V7utwPnTmOrzQjp25wSwgL6TLkYyCEEfrsqqXT9v3oWiSfu6D-fnnAX0jUcKW367DwTbHTRWhrvS02HpJFR_RfnTos_JCln0NFr6Lrac9NpV0u9MVkKKm_PfM7Fd4MQ";
 
   final userService = UserService();
   await userService.saveSelfUserInfo(accessToken, idToken);

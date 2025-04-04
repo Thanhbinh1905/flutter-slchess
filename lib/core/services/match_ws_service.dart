@@ -22,8 +22,8 @@ class MatchWebsocketService {
   }
 
   void listen(
-      {void Function(GameStateModel gameState)? onGameState,
-      void Function(GameStateModel gameState)? onEndgame,
+      {void Function(GameState gameState)? onGameState,
+      void Function(GameState gameState)? onEndgame,
       void Function()? onStatusChange,
       required BuildContext context}) {
     // Thêm BuildContext vào tham số
@@ -32,19 +32,23 @@ class MatchWebsocketService {
         try {
           final data = jsonDecode(message);
           print(data['type'] == "drawOffer");
-          if (data['type'] == "gameState") {
-            GameStateModel gameStateModel = GameStateModel.fromJson(data);
-            if (gameStateModel.outcome != "*") {
-              onEndgame?.call(gameStateModel);
-            }
-            onGameState?.call(gameStateModel);
-          } else if (data['type'] == "drawOffer") {
-            print("opponent offer a draw");
-            _showDrawOfferDialog(context); // Hiện dialog khi có đề nghị hòa
-          } else if (data['type'] == "playerStatus") {
-            onStatusChange?.call();
-          } else {
-            print("Unknown message type: ${data['type']}");
+          switch (data['type']) {
+            case "gameState":
+              GameState gameState = GameState.fromJson(data['game']);
+              if (gameState.outcome != "*") {
+                onEndgame?.call(gameState);
+              }
+              onGameState?.call(gameState);
+              break;
+            case "drawOffer":
+              print("opponent offer a draw");
+              _showDrawOfferDialog(context); // Hiện dialog khi có đề nghị hòa
+              break;
+            case "playerStatus":
+              onStatusChange?.call();
+              break;
+            default:
+              print("Unknown message type: ${data['type']}");
           }
         } catch (e, stackTrace) {
           print('Error processing incoming message: $e');
@@ -55,7 +59,7 @@ class MatchWebsocketService {
         print('Stream encountered an error: $error');
       },
       onDone: () {
-        print('Stream has been closed.');
+        print('Luồng đã bị đóng.');
       },
     );
   }

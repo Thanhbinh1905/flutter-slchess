@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../widgets/widgets.dart';
 import '../constants/constants.dart';
 import '../models/player.dart';
-import '../models/match.dart';
+import '../models/match_model.dart';
 import '../models/chessboard_model.dart';
 import '../models/user.dart';
 import '../widgets/error_dialog.dart';
@@ -33,13 +33,6 @@ class _OfflineGameScreenState extends State<OfflineGameScreen> {
                 fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
           ),
           centerTitle: true,
-          // backgroundColor: Colors.black,
-          // leading: IconButton(
-          //   icon: const Icon(Icons.arrow_back),
-          //   onPressed: () {
-          //     Navigator.popAndPushNamed(context, "/");
-          //   },
-          // ),
         ),
         body: BackgroundContainer(
           Padding(

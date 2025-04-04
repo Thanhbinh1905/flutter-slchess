@@ -9,9 +9,9 @@ import 'package:http/http.dart' as http;
 import 'dart:convert'; // Để sử dụng jsonEncode
 // import 'package:shared_preferences/shared_preferences.dart';
 
-import './matchService.dart';
+import 'match_service.dart';
 import 'match_ws_service.dart';
-import '../models/match.dart';
+import '../models/match_model.dart';
 
 class MatchMakingSerice {
   static final String _localWsGameUrl = WebsocketConstants.game;

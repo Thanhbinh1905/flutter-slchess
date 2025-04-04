@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
-// import '../services/cognito_auth_service.dart';
+import 'package:flutter_slchess/core/widgets/widgets.dart';
+
 import 'play_screen.dart';
+import 'puzzle_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -10,41 +12,101 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  // final CognitoAuth _cognitoAuth = CognitoAuth();
+  int _currentIndex = 0;
 
   @override
   Widget build(BuildContext context) {
-    return DefaultTabController(
-      length: 4,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('SLChess'),
-          actions: const [
-            // IconButton(
-            //   icon: const Icon(Icons.logout),
-            //   onPressed: () async {
-            //     await _cognitoAuth.clearTokens();
-            //     if (context.mounted) {
-            //       Navigator.pushReplacementNamed(context, '/login');
-            //     }
-            //   },
-            // ),
-          ],
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text(
+          'SLChess',
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+            fontSize: 24,
+          ),
         ),
-        body: const TabBarView(
-          children: [
+        backgroundColor: const Color(0xFF0E1416),
+        elevation: 0,
+        automaticallyImplyLeading: false, // Ẩn nút quay lại
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.account_circle, color: Colors.white),
+            onPressed: () {
+              Navigator.pushNamed(context, '/profile');
+            },
+            tooltip: 'Thông tin cá nhân',
+            iconSize: 28,
+          ),
+        ],
+      ),
+      body: Container(
+        decoration: const BoxDecoration(
+          image: DecorationImage(
+            image: AssetImage('assets/bg_dark.png'),
+            fit: BoxFit.cover,
+          ),
+        ),
+        child: IndexedStack(
+          index: _currentIndex,
+          children: const [
             PlayPage(),
-            Center(child: Text('Puzzles Screen')),
-            Center(child: Text('Leaderboards Screen')),
-            Center(child: Text('Settings Screen')),
+            PuzzleScreen(),
+            Center(
+              child: Text(
+                'Bảng xếp hạng sẽ có trong phiên bản tới',
+                style: TextStyle(color: Colors.white, fontSize: 16),
+              ),
+            ),
+            Center(
+              child: Text(
+                'Cài đặt sẽ có trong phiên bản tới',
+                style: TextStyle(color: Colors.white, fontSize: 16),
+              ),
+            ),
           ],
         ),
-        bottomNavigationBar: const TabBar(
-          tabs: [
-            Tab(icon: Icon(Icons.play_arrow), text: "Play"),
-            Tab(icon: Icon(Icons.extension), text: "Puzzles"),
-            Tab(icon: Icon(Icons.leaderboard), text: "Leaderboards"),
-            Tab(icon: Icon(Icons.settings), text: "Settings"),
+      ),
+      bottomNavigationBar: Container(
+        decoration: const BoxDecoration(
+          color: Color(0xFF0E1416),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black26,
+              blurRadius: 8,
+              offset: Offset(0, -2),
+            ),
+          ],
+        ),
+        child: BottomNavigationBar(
+          currentIndex: _currentIndex,
+          onTap: (index) {
+            setState(() {
+              _currentIndex = index;
+            });
+          },
+          backgroundColor: const Color(0xFF0E1416),
+          selectedItemColor: Colors.white,
+          unselectedItemColor: Colors.grey,
+          type: BottomNavigationBarType.fixed,
+          elevation: 0,
+          items: const [
+            BottomNavigationBarItem(
+              icon: Icon(Icons.play_arrow),
+              label: "Chơi",
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.extension),
+              label: "Câu đố",
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.leaderboard),
+              label: "Xếp hạng",
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.settings),
+              label: "Cài đặt",
+            ),
           ],
         ),
       ),

@@ -8,6 +8,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:encrypted_shared_preferences/encrypted_shared_preferences.dart';
 import '../../main.dart';
 import './userService.dart';
+import 'package:jwt_decoder/jwt_decoder.dart';
 
 class CognitoAuth {
   late AppLinks _appLinks;
@@ -19,34 +20,35 @@ class CognitoAuth {
   final redirectUri =
       kIsWeb ? '${Uri.base.origin}/callback' : 'slchess://callback';
 
-  // Các key để lưu token
   static const String ACCESS_TOKEN_KEY = "ACCESS_TOKEN";
   static const String ID_TOKEN_KEY = "ID_TOKEN";
   static const String REFRESH_TOKEN_KEY = "REFRESH_TOKEN";
-
-  // Thêm key để lưu thông tin người dùng
   static const String USER_INFO_KEY = "USER_INFO";
 
   Future<void> initAppLinks() async {
     _appLinks = AppLinks();
 
-    // Lắng nghe các deep link
+    await _checkTokenAndNavigate();
+
+    final uri = await _appLinks.getInitialAppLink();
+
     _appLinks.uriLinkStream.listen((Uri? uri) {
-      if (uri != null) {
-        final code = uri.queryParameters['code'];
-        if (code != null) {
-          getToken(code);
-        }
+      if (uri?.queryParameters['code'] != null) {
+        getToken(uri!.queryParameters['code']!);
       }
     });
 
-    // Kiểm tra initial link
     try {
-      final uri = await _appLinks.getInitialAppLink();
-      if (uri != null) {
-        final code = uri.queryParameters['code'];
-        if (code != null) {
-          getToken(code);
+      if (uri?.queryParameters['code'] != null) {
+        final lastProcessedCode =
+            await storage.getString("LAST_PROCESSED_CODE");
+        final currentCode = uri!.queryParameters['code']!;
+
+        if (lastProcessedCode != currentCode) {
+          await storage.setString("LAST_PROCESSED_CODE", currentCode);
+          getToken(currentCode);
+        } else {
+          print('Code này đã được xử lý trước đó, bỏ qua');
         }
       }
     } catch (e) {
@@ -54,8 +56,30 @@ class CognitoAuth {
     }
   }
 
+  Future<void> _checkTokenAndNavigate() async {
+    final accessToken = await getStoredAccessToken();
+    final refreshToken = await getStoredRefreshToken();
+
+    if (accessToken != null && !await isTokenExpired(accessToken)) {
+      navigateToHome();
+    } else if (refreshToken != null && !await isTokenExpired(refreshToken)) {
+      await this.refreshToken();
+      navigateToHome();
+    } else {
+      print("Token đã hết hạn hoặc không tồn tại");
+
+      final currentRoute =
+          ModalRoute.of(navigatorKey.currentContext!)?.settings.name;
+      if (currentRoute != '/login') {
+        Navigator.pushReplacementNamed(
+          navigatorKey.currentContext!,
+          '/login',
+        );
+      }
+    }
+  }
+
   Future<void> handleLogin() async {
-    print(redirectUri);
     try {
       final url = Uri.https(
         cognitoUrl!,
@@ -87,18 +111,19 @@ class CognitoAuth {
         },
       );
 
-      print(tokenResponse);
-
       if (tokenResponse.statusCode == 200) {
         final tokens = json.decode(tokenResponse.body);
 
-        await storage.setString(ACCESS_TOKEN_KEY, tokens['access_token']);
-        await storage.setString(ID_TOKEN_KEY, tokens['id_token']);
-        await storage.setString(REFRESH_TOKEN_KEY, tokens['refresh_token']);
+        await Future.wait([
+          storage.setString(ACCESS_TOKEN_KEY, tokens['access_token']),
+          storage.setString(ID_TOKEN_KEY, tokens['id_token']),
+          storage.setString(REFRESH_TOKEN_KEY, tokens['refresh_token']),
+        ]);
 
-        // Tiếp tục lấy thông tin người dùng
         await userService.saveSelfUserInfo(
-            tokens['access_token'], tokens['id_token']);
+          tokens['access_token'],
+          tokens['id_token'],
+        );
 
         navigateToHome();
       } else {
@@ -125,18 +150,22 @@ class CognitoAuth {
 
       if (response.statusCode == 200) {
         final tokens = json.decode(response.body);
-        await storage.setString(ACCESS_TOKEN_KEY, tokens['access_token']);
+        await Future.wait([
+          storage.setString(ACCESS_TOKEN_KEY, tokens['access_token']),
+          storage.setString(ID_TOKEN_KEY, tokens['id_token']),
+        ]);
         print('Token đã được refresh.');
+
+        navigateToHome();
       } else {
         print('Lỗi refresh token: ${response.body}');
-        await clearTokens(); // Xóa token nếu refresh thất bại
+        await clearTokens();
       }
     } catch (e) {
       print('Lỗi xử lý refresh token: $e');
     }
   }
 
-  // Hàm điều hướng đến home screen
   void navigateToHome() {
     Navigator.pushReplacementNamed(
       navigatorKey.currentContext!,
@@ -144,20 +173,37 @@ class CognitoAuth {
     );
   }
 
-  // Hàm lấy token đã lưu
-  Future<String?> getStoredAccessToken() => storage.getString(ACCESS_TOKEN_KEY);
+  Future<bool> isTokenExpired(String? token) async {
+    if (token == null || token.isEmpty) {
+      return true;
+    }
 
-  Future<String?> getStoredIdToken() async {
-    String? token = await storage.getString(ID_TOKEN_KEY);
-    return token;
+    try {
+      return JwtDecoder.isExpired(token);
+    } catch (e) {
+      print('Lỗi khi kiểm tra token hết hạn: $e');
+      return true;
+    }
   }
 
+  Future<String?> getStoredAccessToken() => storage.getString(ACCESS_TOKEN_KEY);
+  Future<String?> getStoredIdToken() => storage.getString(ID_TOKEN_KEY);
   Future<String?> getStoredRefreshToken() =>
       storage.getString(REFRESH_TOKEN_KEY);
 
   Future<void> clearTokens() async {
-    await storage.remove(ACCESS_TOKEN_KEY);
-    await storage.remove(ID_TOKEN_KEY);
-    await storage.remove(REFRESH_TOKEN_KEY);
+    try {
+      await storage.remove(ACCESS_TOKEN_KEY);
+      await storage.remove(ID_TOKEN_KEY);
+      await storage.remove(REFRESH_TOKEN_KEY);
+
+      // Xóa thông tin người dùng từ Hive
+      await userService.clearUserData();
+
+      print("Đã xóa token và thông tin người dùng");
+    } catch (e) {
+      print("Lỗi khi xóa token: $e");
+      rethrow;
+    }
   }
 }

@@ -1,59 +1,23 @@
-class GameStateModel {
-  final String outcome;
-  final String method;
+class GameState {
   final String fen;
   final List<int> clocks;
+  final String? outcome;
+  final String? method;
 
-  GameStateModel({
-    required this.outcome,
-    required this.method,
+  GameState({
     required this.fen,
     required this.clocks,
+    this.outcome,
+    this.method,
   });
 
-  factory GameStateModel.fromJson(Map<String, dynamic> json) {
-    return GameStateModel(
-      outcome: json['game']['outcome'],
-      method: json['game']['method'],
-      fen: json['game']['fen'],
-      clocks: List<int>.from(json['game']['clocks'].map((clock) {
-        final parts = clock.split('m');
-        if (parts.length == 2) {
-          final minutes = int.parse(parts[0]);
-          final seconds = double.parse(parts[1].replaceAll('s', ''));
-          return (minutes * 60 * 1000 + (seconds * 1000)).toInt();
-        } else {
-          final seconds = double.parse(parts[0].replaceAll('s', ''));
-          return (seconds * 1000).toInt();
-        }
-      })),
+  factory GameState.fromJson(Map<String, dynamic> json) {
+    return GameState(
+      fen: json['fen'] as String,
+      clocks: List<int>.from(json['clocks']),
+      outcome: json['outcome'] as String?,
+      method: json['method'] as String?,
     );
-  }
-}
-
-enum Status { CONNECTED, DISCONNECTED }
-
-class PlayerStateModel {
-  final String id;
-  final Status status;
-
-  PlayerStateModel({
-    required this.id,
-    required this.status,
-  });
-
-  factory PlayerStateModel.fromJson(Map<String, dynamic> json) {
-    return PlayerStateModel(
-      id: json['id'],
-      status: Status.values.byName(json['status']),
-    );
-  }
-
-  Map<String, dynamic> toJson() {
-    return {
-      'id': id,
-      'status': status.name.toLowerCase(),
-    };
   }
 }
 

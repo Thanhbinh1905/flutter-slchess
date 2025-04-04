@@ -8,14 +8,15 @@ class Player {
   final List<int> newRatings;
   final double rd;
   final List<double> newRDs;
+  bool isConnect;
 
-  Player({
-    required this.user,
-    required this.rating,
-    this.rd = 0.0,
-    this.newRatings = const [],
-    this.newRDs = const [],
-  });
+  Player(
+      {required this.user,
+      required this.rating,
+      this.rd = 0.0,
+      this.newRatings = const [],
+      this.newRDs = const [],
+      this.isConnect = false});
 
   static Future<Player> fromJson(Map<String, dynamic> json) async {
     final cognitoAuth = CognitoAuth();
@@ -46,6 +47,32 @@ class Player {
       'rd': rd,
       'newRatings': newRatings,
       'newRDs': newRDs,
+    };
+  }
+}
+
+class PlayerStateModel {
+  final String id;
+  final bool status; // true nếu CONNECTED, false nếu DISCONNECTED
+
+  PlayerStateModel({
+    required this.id,
+    required this.status,
+  });
+
+  // Chuyển từ JSON thành PlayerStateModel
+  factory PlayerStateModel.fromJson(Map<String, dynamic> json) {
+    return PlayerStateModel(
+      id: json['id'] as String,
+      status: (json['status'] as String).toUpperCase() == "CONNECTED",
+    );
+  }
+
+  // Chuyển từ PlayerStateModel thành JSON
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'status': status,
     };
   }
 }
