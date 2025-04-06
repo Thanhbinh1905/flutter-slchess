@@ -4,7 +4,7 @@ import 'package:chess/chess.dart' as chess;
 import 'package:flutter_slchess/core/models/match_model.dart';
 import 'package:flutter_slchess/core/models/gamestate_model.dart';
 import 'package:flutter_slchess/core/services/match_ws_service.dart';
-import 'package:flutter_slchess/core/services/cognito_auth_service.dart';
+import 'package:flutter_slchess/core/services/amplify_auth_service.dart';
 
 import 'dart:async';
 import 'dart:math' as math;
@@ -60,9 +60,9 @@ class _ChessboardState extends State<Chessboard> {
   late bool isWhite;
 
   // Websocket and services
-  CognitoAuth cognitoAuth = CognitoAuth();
   late MatchWebsocketService matchService;
   late MatchModel matchModel;
+  final AmplifyAuthService _amplifyAuthService = AmplifyAuthService();
 
   @override
   void initState() {
@@ -144,7 +144,7 @@ class _ChessboardState extends State<Chessboard> {
     board =
         parseFEN('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1');
 
-    String? storedIdToken = await cognitoAuth.getStoredIdToken();
+    String? storedIdToken = await _amplifyAuthService.getIdToken();
     matchService = MatchWebsocketService.startGame(
         matchModel.matchId, storedIdToken!, server);
 
@@ -605,6 +605,125 @@ class _ChessboardState extends State<Chessboard> {
     chess.Move move = validMoves.firstWhere(
         (m) => m.fromAlgebraic == selectedSquare && m.toAlgebraic == coor);
 
+    // Kiểm tra nếu là nước đi phong cấp (promotion)
+    if (_isPromotion(move)) {
+      _showPromotionDialog(move, coor);
+      return;
+    }
+
+    _executeMove(move, coor);
+  }
+
+  // Kiểm tra xem nước đi có phải là phong cấp không
+  bool _isPromotion(chess.Move move) {
+    String? piece = move.piece.toLowerCase();
+    String to = move.toAlgebraic;
+    int rank = int.parse(to[1]);
+
+    // Tốt trắng đến hàng 8 hoặc tốt đen đến hàng 1
+    return piece == 'p' &&
+        ((move.color.name == 'WHITE' && rank == 8) ||
+            (move.color.name == 'BLACK' && rank == 1));
+  }
+
+  // Hiển thị dialog chọn quân cờ cho phong cấp
+  void _showPromotionDialog(chess.Move move, String coor) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Chọn quân cờ phong cấp'),
+          content: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              _buildPromotionChoice(
+                  context, move, coor, move.color.name == 'WHITE' ? 'Q' : 'q'),
+              _buildPromotionChoice(
+                  context, move, coor, move.color.name == 'WHITE' ? 'R' : 'r'),
+              _buildPromotionChoice(
+                  context, move, coor, move.color.name == 'WHITE' ? 'B' : 'b'),
+              _buildPromotionChoice(
+                  context, move, coor, move.color.name == 'WHITE' ? 'N' : 'n'),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  // Xây dựng widget cho từng lựa chọn phong cấp
+  Widget _buildPromotionChoice(BuildContext context, chess.Move move,
+      String coor, String promotionPiece) {
+    return GestureDetector(
+      onTap: () {
+        Navigator.of(context).pop();
+
+        // Tạo chuỗi nước đi với thông tin phong cấp (ví dụ: e7e8q)
+        String moveString =
+            "${move.fromAlgebraic}${move.toAlgebraic}${promotionPiece.toLowerCase()}";
+
+        print("moveString: $moveString");
+        // Thực hiện nước đi
+        game.move({
+          'from': move.fromAlgebraic,
+          'to': move.toAlgebraic,
+          'promotion': promotionPiece.toLowerCase(), // 'q', 'n', 'b', 'r'
+        });
+
+        setState(() {
+          fen = game.fen;
+          listFen.add(fen);
+          board = parseFEN(fen);
+
+          // Lưu thông tin nước đi gần nhất
+          lastMoveFrom = move.fromAlgebraic;
+          lastMoveTo = move.toAlgebraic;
+
+          // Tăng thời gian sau khi di chuyển
+          if (isWhiteTurn) {
+            whiteTime += timeIncrement * 1000;
+          } else {
+            blackTime += timeIncrement * 1000;
+          }
+
+          _scrollToBottomAfterBuild();
+          halfmove = listFen.length - 1;
+
+          // Gửi nước đi đến server nếu đang chơi online
+          if (isOnline) {
+            matchService.makeMove(moveString);
+          }
+
+          // Đổi lượt
+          isWhiteTurn = !isWhiteTurn;
+
+          if (enableFlip && !isOnline) {
+            isWhite = !isWhite;
+          }
+
+          // Kiểm tra kết thúc ván đấu
+          _checkGameEnd();
+        });
+
+        // Reset trạng thái lựa chọn
+        selectedSquare = null;
+        validSquares = {};
+      },
+      child: Container(
+        width: 40,
+        height: 40,
+        margin: const EdgeInsets.all(4),
+        child: Image.asset(
+          getPieceAsset(promotionPiece),
+          fit: BoxFit.contain,
+        ),
+      ),
+    );
+  }
+
+  // Thực hiện nước đi (đã được tách từ _processMove)
+  void _executeMove(chess.Move move, String coor) {
     bool success = game.move(move);
     if (success) {
       fen = game.fen;
@@ -626,6 +745,10 @@ class _ChessboardState extends State<Chessboard> {
       halfmove = listFen.length - 1;
 
       String sanMove = move.fromAlgebraic + move.toAlgebraic;
+      // Thêm thông tin phong cấp nếu có
+      if (move.promotion != null) {
+        sanMove += move.promotion!.toLowerCase();
+      }
 
       if (isOnline) {
         matchService.makeMove(sanMove);

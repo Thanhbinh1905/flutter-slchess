@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_slchess/core/models/puzzle_model.dart';
 import 'package:flutter_slchess/core/services/puzzle_service.dart';
-import 'package:flutter_slchess/core/services/cognito_auth_service.dart';
+import 'package:flutter_slchess/core/services/amplify_auth_service.dart';
 
 class PuzzleScreen extends StatefulWidget {
   const PuzzleScreen({super.key});
@@ -12,11 +12,11 @@ class PuzzleScreen extends StatefulWidget {
 
 class _PuzzleScreenState extends State<PuzzleScreen> {
   final PuzzleService _puzzleService = PuzzleService();
-  final CognitoAuth _cognitoAuth = CognitoAuth();
   List<Puzzle>? _puzzles;
   bool _isLoading = true;
   String? _errorMessage;
   PuzzleProfile? _puzzleProfile;
+  final AmplifyAuthService _amplifyAuthService = AmplifyAuthService();
 
   @override
   void initState() {
@@ -39,7 +39,7 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
         _errorMessage = null;
       });
 
-      final String? idToken = await _cognitoAuth.getStoredIdToken();
+      final String? idToken = await _amplifyAuthService.getIdToken();
       if (idToken == null) {
         throw Exception("Vui lòng đăng nhập lại");
       }
@@ -61,7 +61,7 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
 
   Future<void> _loadPuzzleProfile() async {
     try {
-      final String? idToken = await _cognitoAuth.getStoredIdToken();
+      final String? idToken = await _amplifyAuthService.getIdToken();
       if (idToken == null) {
         return;
       }
@@ -80,7 +80,7 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
 
   void _openPuzzle(Puzzle puzzle) async {
     try {
-      final String? idToken = await _cognitoAuth.getStoredIdToken();
+      final String? idToken = await _amplifyAuthService.getIdToken();
       if (idToken == null) {
         throw Exception("Vui lòng đăng nhập lại");
       }

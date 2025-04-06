@@ -138,6 +138,12 @@ class _PuzzleChessboardState extends State<PuzzleChessboard> {
         return;
       }
 
+      // Kiểm tra xem đây có phải là nước đi phong cấp không
+      if (_isPromotion(validMove)) {
+        _showPromotionDialog(validMove);
+        return;
+      }
+
       _makeMove(validMove);
 
       setState(() {
@@ -157,6 +163,113 @@ class _PuzzleChessboardState extends State<PuzzleChessboard> {
         Timer(const Duration(milliseconds: 500), _makeOpponentMove);
       }
     }
+  }
+
+  // Kiểm tra xem nước đi có phải là phong cấp không
+  bool _isPromotion(chess.Move move) {
+    String? piece = move.piece.toLowerCase();
+    String to = move.toAlgebraic;
+    int rank = int.parse(to[1]);
+
+    // Tốt trắng đến hàng 8 hoặc tốt đen đến hàng 1
+    return piece == 'p' &&
+        ((move.color.name == 'WHITE' && rank == 8) ||
+            (move.color.name == 'BLACK' && rank == 1));
+  }
+
+  // Hiển thị dialog chọn quân cờ cho phong cấp
+  void _showPromotionDialog(chess.Move move) {
+    final isWhitePiece = move.color.name == 'WHITE';
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Chọn quân cờ phong cấp'),
+          content: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              _buildPromotionChoice(context, move, isWhitePiece ? 'Q' : 'q'),
+              _buildPromotionChoice(context, move, isWhitePiece ? 'R' : 'r'),
+              _buildPromotionChoice(context, move, isWhitePiece ? 'B' : 'b'),
+              _buildPromotionChoice(context, move, isWhitePiece ? 'N' : 'n'),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  // Xây dựng widget cho từng lựa chọn phong cấp
+  Widget _buildPromotionChoice(
+      BuildContext context, chess.Move move, String promotionPiece) {
+    return GestureDetector(
+      onTap: () {
+        Navigator.of(context).pop();
+
+        String moveString =
+            "${move.fromAlgebraic}${move.toAlgebraic}${promotionPiece.toLowerCase()}";
+
+        print("moveString: $moveString");
+        // Thực hiện nước đi
+        game.move({
+          'from': move.fromAlgebraic,
+          'to': move.toAlgebraic,
+          'promotion': promotionPiece.toLowerCase(), // 'q', 'n', 'b', 'r'
+        });
+
+        // Kiểm tra nước đi cần thiết cho puzzle
+        String baseMoveRequired =
+            solutionMoves[currentMoveIndex].substring(0, 4);
+        String promotionRequired = solutionMoves[currentMoveIndex].length > 4
+            ? solutionMoves[currentMoveIndex].substring(4)
+            : '';
+
+        // Kiểm tra nếu cần thiết phải phong cấp đúng quân cờ cho puzzle
+        if (promotionRequired.isNotEmpty &&
+            promotionPiece.toLowerCase() != promotionRequired) {
+          setState(() {
+            message = "Không đúng quân cờ phong cấp!";
+            isPuzzleFailed = true;
+            isPlayerTurn = false;
+          });
+          return;
+        }
+
+        // Thực hiện nước đi
+        game.move(moveString);
+
+        setState(() {
+          lastMoveFrom = move.fromAlgebraic;
+          lastMoveTo = move.toAlgebraic;
+          board = parseFEN(game.fen);
+          message = "Chính xác!";
+          selectedSquare = null;
+          validSquares = {};
+          validMoves = [];
+          isPlayerTurn = false;
+          currentMoveIndex++;
+        });
+
+        // Kiểm tra xem puzzle đã được giải chưa
+        if (currentMoveIndex >= solutionMoves.length) {
+          _onPuzzleSolved();
+        } else {
+          // Thực hiện nước đi của máy sau 1 giây
+          Timer(const Duration(milliseconds: 500), _makeOpponentMove);
+        }
+      },
+      child: Container(
+        width: 40,
+        height: 40,
+        margin: const EdgeInsets.all(4),
+        child: Image.asset(
+          getPieceAsset(promotionPiece),
+          fit: BoxFit.contain,
+        ),
+      ),
+    );
   }
 
   String _formatMoveForComparison(String move) {

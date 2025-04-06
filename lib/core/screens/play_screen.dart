@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../constants/constants.dart'; // Đảm bảo import constants
 import '../services/userService.dart';
 import '../models/user.dart';
-import '../services/cognito_auth_service.dart';
+import 'package:flutter_slchess/core/services/amplify_auth_service.dart';
 
 class PlayPage extends StatefulWidget {
   const PlayPage({super.key});
@@ -14,7 +14,7 @@ class PlayPage extends StatefulWidget {
 class _PlayPageState extends State<PlayPage> {
   String? selectedTimeControl; // Biến để lưu trữ giá trị đã chọn
   final UserService _userService = UserService();
-  final CognitoAuth _cognitoAuth = CognitoAuth();
+  final AmplifyAuthService _amplifyAuthService = AmplifyAuthService();
   UserModel? _user;
   bool _isLoading = false;
 
@@ -25,6 +25,7 @@ class _PlayPageState extends State<PlayPage> {
   }
 
   Future<void> _loadUserData() async {
+    if (!mounted) return;
     setState(() {
       _isLoading = true;
     });
@@ -33,18 +34,20 @@ class _PlayPageState extends State<PlayPage> {
       final user = await _userService.getPlayer();
 
       if (user == null) {
-        final String? accessToken = await _cognitoAuth.getStoredAccessToken();
-        final String? idToken = await _cognitoAuth.getStoredIdToken();
+        final String? accessToken = await _amplifyAuthService.getAccessToken();
+        final String? idToken = await _amplifyAuthService.getIdToken();
 
         if (accessToken != null && idToken != null) {
           await _userService.saveSelfUserInfo(accessToken, idToken);
           final refreshedUser = await _userService.getPlayer();
+          if (!mounted) return;
           setState(() {
             _user = refreshedUser;
             _isLoading = false;
           });
         }
       } else {
+        if (!mounted) return;
         setState(() {
           _user = user;
           _isLoading = false;
@@ -52,6 +55,7 @@ class _PlayPageState extends State<PlayPage> {
       }
     } catch (e) {
       print("Lỗi khi tải thông tin người dùng: $e");
+      if (!mounted) return;
       setState(() {
         _isLoading = false;
       });

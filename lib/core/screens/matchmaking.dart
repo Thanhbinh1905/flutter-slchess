@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import '../services/matchmaking_service.dart';
-import '../services/cognito_auth_service.dart';
 import '../services/userService.dart';
 import '../models/user.dart';
 import '../models/chessboard_model.dart';
 import '../models/match_model.dart';
+import '../services/amplify_auth_service.dart';
 
 class MatchMakingScreen extends StatefulWidget {
   final String gameMode;
@@ -23,9 +23,11 @@ class MatchMakingScreen extends StatefulWidget {
 class _MatchMakingScreenState extends State<MatchMakingScreen> {
   late String gameMode;
   bool isQueued = false;
+  bool isLoading = true;
+  String statusMessage = "Đang tìm đối thủ...";
 
   final MatchMakingSerice matchMakingService = MatchMakingSerice();
-  final CognitoAuth cognitoAuth = CognitoAuth();
+  final AmplifyAuthService _amplifyAuthService = AmplifyAuthService();
   final UserService userService = UserService();
 
   UserModel? _user;
@@ -42,12 +44,13 @@ class _MatchMakingScreenState extends State<MatchMakingScreen> {
 
   Future<void> _initializeMatchmaking() async {
     try {
-      final String? storedIdToken = await cognitoAuth.getStoredIdToken();
+      final String? storedIdToken = await _amplifyAuthService.getIdToken();
       if (storedIdToken == null) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text("Vui lòng đăng nhập lại")),
           );
+          Navigator.pop(context);
         }
         return;
       }
@@ -68,32 +71,37 @@ class _MatchMakingScreenState extends State<MatchMakingScreen> {
         }
       }
 
-      print("User info: ${_user!.toJson()}");
-      if (!mounted) {
-        print("Widget đã bị dispose");
-        return;
-      }
-
-      final double userRating = _user!.rating;
+      if (!mounted) return;
+      setState(() {
+        isLoading = false;
+      });
 
       // Tìm trận đấu
       MatchModel? match;
       try {
+        setState(() {
+          statusMessage = "Đang tìm đối thủ phù hợp...";
+        });
+
         match = await matchMakingService.getQueue(
-            storedIdToken, gameMode, userRating);
+            storedIdToken, gameMode, _user!.rating);
 
         if (match == null) {
-          print("Không thể tìm trận đấu phù hợp");
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text("Không thể tìm trận đấu phù hợp")),
-            );
+            setState(() {
+              statusMessage = "Không tìm thấy đối thủ phù hợp";
+            });
+            await Future.delayed(const Duration(seconds: 2));
             Navigator.pop(context);
           }
           return;
         }
 
         // Lấy thông tin đối thủ
+        setState(() {
+          statusMessage = "Đã tìm thấy đối thủ!";
+        });
+
         try {
           opponent = match.player1.user.id == _user!.id
               ? await userService.getUserInfo(
@@ -102,7 +110,6 @@ class _MatchMakingScreenState extends State<MatchMakingScreen> {
                   match.player1.user.id, storedIdToken);
         } catch (e) {
           print("Lỗi khi lấy thông tin đối thủ: $e");
-          // Tiếp tục với thông tin đối thủ cơ bản từ match
           opponent = match.player1.user.id == _user!.id
               ? match.player2.user
               : match.player1.user;
@@ -110,7 +117,7 @@ class _MatchMakingScreenState extends State<MatchMakingScreen> {
 
         if (!mounted) return;
 
-        // Tạo model bàn cờ dù có thông tin đối thủ đầy đủ hay không
+        // Tạo model bàn cờ
         chessboardModel = ChessboardModel(
           match: match,
           isOnline: true,
@@ -122,24 +129,28 @@ class _MatchMakingScreenState extends State<MatchMakingScreen> {
             isQueued = true;
           });
 
+          await Future.delayed(const Duration(seconds: 1));
           Navigator.popAndPushNamed(context, "/board",
               arguments: chessboardModel);
         }
       } catch (e, stackTrace) {
         print("Lỗi khi tìm trận đấu: $e\n$stackTrace");
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text("Lỗi tìm trận: ${e.toString()}")),
-          );
+          setState(() {
+            statusMessage = "Lỗi khi tìm trận đấu";
+          });
+          await Future.delayed(const Duration(seconds: 2));
           Navigator.pop(context);
         }
       }
     } catch (e, stackTrace) {
       print("Lỗi khi khởi tạo matchmaking: $e\n$stackTrace");
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Lỗi: ${e.toString()}")),
-        );
+        setState(() {
+          statusMessage = "Lỗi khi khởi tạo";
+        });
+        await Future.delayed(const Duration(seconds: 2));
+        Navigator.pop(context);
       }
     }
   }
@@ -168,58 +179,70 @@ class _MatchMakingScreenState extends State<MatchMakingScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      if (_user != null)
-                        buildUserAvatar(_user!)
-                      else
-                        const CircularProgressIndicator(),
-                      const SizedBox(width: 10),
-                      if (isQueued && opponent != null) ...[
+                  if (isLoading)
+                    const CircularProgressIndicator()
+                  else ...[
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        if (_user != null)
+                          buildUserAvatar(_user!)
+                        else
+                          const CircularProgressIndicator(),
                         const SizedBox(width: 10),
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(25),
-                          child: SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: Image.asset(
-                              'assets/weapon.png',
-                              fit: BoxFit.cover,
+                        if (isQueued && opponent != null) ...[
+                          const SizedBox(width: 10),
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(25),
+                            child: SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: Image.asset(
+                                'assets/weapon.png',
+                                fit: BoxFit.cover,
+                              ),
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 10),
-                        buildUserAvatar(opponent!),
-                      ] else ...[
-                        const CircularProgressIndicator(),
-                        const SizedBox(width: 10),
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(25),
-                          child: const SizedBox(
-                            width: 50,
-                            height: 50,
-                            child: Image(
-                              image: AssetImage('assets/default_avt.jpg'),
-                              fit: BoxFit.cover,
+                          const SizedBox(width: 10),
+                          buildUserAvatar(opponent!),
+                        ] else ...[
+                          const CircularProgressIndicator(),
+                          const SizedBox(width: 10),
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(25),
+                            child: const SizedBox(
+                              width: 50,
+                              height: 50,
+                              child: Image(
+                                image: AssetImage('assets/default_avt.jpg'),
+                                fit: BoxFit.cover,
+                              ),
                             ),
                           ),
-                        ),
+                        ],
                       ],
-                    ],
-                  ),
-                  const SizedBox(height: 15),
-                  Text(
-                    isQueued ? "Queued" : "Queueing.....",
-                  ),
-                  const SizedBox(height: 20),
-                  ElevatedButton(
-                    onPressed: () {
-                      Navigator.pop(context);
-                    },
-                    child: const Text("Quay lại"),
-                  ),
+                    ),
+                    const SizedBox(height: 20),
+                    Text(
+                      statusMessage,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    ElevatedButton(
+                      onPressed: () {
+                        Navigator.pop(context);
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red,
+                        foregroundColor: Colors.white,
+                      ),
+                      child: const Text("Hủy tìm kiếm"),
+                    ),
+                  ],
                 ],
               ),
             ),

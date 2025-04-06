@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import '../constants/constants.dart';
 import 'package:hive/hive.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'dart:math' as math;
 
 class UserService {
   static String getUserApiUrl = ApiConstants.getUserInfo;
@@ -12,12 +13,26 @@ class UserService {
 
   static const String USER_BOX = 'userBox';
 
-  Future<UserModel> getUserInfo(String userId, String idToken) async {
+  Future<UserModel> getUserInfo(String userId, String idToken,
+      {Function? onAuthError}) async {
     try {
-      final response = await http.get(Uri.parse("$getUserApiUrl/$userId"),
-          headers: {'Authorization': idToken});
+      final response = await http.get(
+        Uri.parse("$getUserApiUrl/$userId"),
+        headers: {'Authorization': 'Bearer $idToken'},
+      );
       if (response.statusCode == 200) {
         return UserModel.fromJson(jsonDecode(response.body));
+      } else if (response.statusCode == 401) {
+        // Token hết hạn hoặc không hợp lệ
+        print("Token hết hạn hoặc không hợp lệ (401) trong getUserInfo");
+
+        // Gọi callback để xử lý lỗi xác thực (ví dụ: đăng xuất hoặc refresh token)
+        if (onAuthError != null) {
+          onAuthError();
+        }
+
+        throw Exception(
+            'Token hết hạn hoặc không hợp lệ: ${response.statusCode}');
       } else {
         print("API lỗi: ${response.statusCode}, Body: ${response.body}");
         throw Exception('Failed to load user info: ${response.statusCode}');
@@ -53,16 +68,44 @@ class UserService {
     }
   }
 
-  Future<void> saveSelfUserInfo(String accessToken, String idToken) async {
+  Future<void> saveSelfUserInfo(String accessToken, String idToken,
+      {Function? onAuthError}) async {
     try {
+      // Kiểm tra token trước khi xử lý
+      if (accessToken.isEmpty || idToken.isEmpty) {
+        print("Token không hợp lệ (rỗng), không thể lấy thông tin người dùng");
+
+        if (onAuthError != null) {
+          onAuthError();
+        }
+
+        throw Exception('Token rỗng, không thể lấy thông tin người dùng');
+      }
+
       // Đảm bảo box được khởi tạo trước khi sử dụng
       if (!Hive.isBoxOpen(USER_BOX)) {
         await Hive.openBox<UserModel>(USER_BOX);
       }
 
+      // Sử dụng accessToken thay vì idToken
+      final String processedAccessToken = _processToken(accessToken);
+
+      if (processedAccessToken.isEmpty) {
+        print("Processed token rỗng, không thể lấy thông tin người dùng");
+
+        if (onAuthError != null) {
+          onAuthError();
+        }
+
+        throw Exception('Processed token rỗng');
+      }
+
+      print(
+          "Access Token (processed): ${processedAccessToken.substring(0, math.min(20, processedAccessToken.length))}..."); // Debug
+
       final response = await http.get(
         Uri.parse(getSelfUserApiUrl),
-        headers: {'Authorization': 'Bearer $accessToken'},
+        headers: {'Authorization': 'Bearer $processedAccessToken'},
       );
 
       print(
@@ -70,15 +113,90 @@ class UserService {
 
       if (response.statusCode == 200) {
         String userId = jsonDecode(response.body)['sub'];
-        UserModel user = await getUserInfo(userId, idToken);
+        UserModel user =
+            await getUserInfo(userId, idToken, onAuthError: onAuthError);
         print("User data: ${user.toJson()}");
         await savePlayer(user);
+      } else if (response.statusCode == 401) {
+        // Token hết hạn hoặc không hợp lệ
+        print("Token hết hạn hoặc không hợp lệ (401)");
+
+        // Xóa thông tin người dùng
+        await clearUserData();
+
+        // Gọi callback để xử lý lỗi xác thực (ví dụ: đăng xuất hoặc refresh token)
+        if (onAuthError != null) {
+          onAuthError();
+        }
+
+        throw Exception(
+            'Token hết hạn hoặc không hợp lệ: ${response.statusCode}');
       } else {
         throw Exception('Failed to load user info: ${response.statusCode}');
       }
     } catch (e) {
       print("Error when getting user info: $e");
       throw Exception('Error when getting user info: $e');
+    }
+  }
+
+  // Xử lý token nếu có định dạng JSON
+  String _processToken(String token) {
+    try {
+      print("Xử lý token, độ dài: ${token.length}");
+
+      // Kiểm tra xem token có phải là một đối tượng JSON không
+      if (token.trim().startsWith('{') && token.trim().endsWith('}')) {
+        print("Token có định dạng JSON, bắt đầu xử lý");
+
+        try {
+          // Cố gắng phân tích thành JSON
+          final Map<String, dynamic> tokenObj = jsonDecode(token);
+
+          print("Token đã được parse thành JSON: ${tokenObj.keys.join(', ')}");
+
+          // Nếu là token của Amplify Cognito
+          if (tokenObj.containsKey('jwtToken')) {
+            print("Tìm thấy jwtToken trong token");
+            return tokenObj['jwtToken'];
+          }
+
+          // Nếu là token có claims và header
+          if (tokenObj.containsKey('claims') &&
+              tokenObj.containsKey('header')) {
+            print("Tìm thấy claims và header trong token");
+            // Tạo JWT từ claims và header
+            final header =
+                base64Url.encode(utf8.encode(jsonEncode(tokenObj['header'])));
+            final claims =
+                base64Url.encode(utf8.encode(jsonEncode(tokenObj['claims'])));
+            final signature = tokenObj['signature'] ?? '';
+            return '$header.$claims.$signature';
+          }
+
+          // Kiểm tra xem token có chứa sub không - đây có thể là token ID
+          if (tokenObj.containsKey('sub')) {
+            print("Token dường như là ID token, sử dụng nó trực tiếp");
+            // Đây có thể là token ID được parse thành JSON, chúng ta cần chuyển lại thành chuỗi
+            return token;
+          }
+
+          print("Không tìm thấy định dạng token đã biết trong JSON");
+        } catch (e) {
+          print("Lỗi khi parse token JSON: $e");
+        }
+      } else if (token.contains('.')) {
+        // Kiểm tra nếu token có dạng của JWT (header.payload.signature)
+        print("Token có dạng JWT standard");
+        return token;
+      }
+
+      // Trả về token gốc nếu không cần xử lý đặc biệt
+      print("Sử dụng token gốc (không xử lý)");
+      return token;
+    } catch (e) {
+      print("Lỗi trong quá trình xử lý token: $e");
+      return token;
     }
   }
 
@@ -110,6 +228,9 @@ class UserService {
       if (rawValue is UserModel) {
         print("Retrieved user: ${rawValue.username}");
         return rawValue;
+      } else if (rawValue == null) {
+        print("No user data found in Hive box");
+        return null;
       } else {
         print("Wrong type found in Hive box: ${rawValue.runtimeType}");
         // Clean up the corrupted data
@@ -118,6 +239,16 @@ class UserService {
       }
     } catch (e) {
       print("Error retrieving player from Hive: $e");
+      // Cleanup on error
+      try {
+        if (Hive.isBoxOpen(USER_BOX)) {
+          final box = Hive.box<UserModel>(USER_BOX);
+          await box.delete('currentPlayer');
+          await box.close();
+        }
+      } catch (cleanupError) {
+        print("Error during cleanup: $cleanupError");
+      }
       return null;
     }
   }
@@ -125,13 +256,20 @@ class UserService {
   // Xóa thông tin người dùng - hữu ích khi đăng xuất
   Future<void> clearUserData() async {
     try {
+      // Đảm bảo mở box, nếu chưa mở
       if (!Hive.isBoxOpen(USER_BOX)) {
         await Hive.openBox<UserModel>(USER_BOX);
       }
 
       final box = await Hive.openBox<UserModel>(USER_BOX);
       await box.delete('currentPlayer');
-      print("User data cleared");
+      await box.close(); // Đóng box sau khi xóa
+      print("User data cleared completely");
+
+      // Đảm bảo rằng khi chúng ta truy cập lại thì sẽ nhận được null
+      if (Hive.isBoxOpen(USER_BOX)) {
+        await Hive.box<UserModel>(USER_BOX).close();
+      }
     } catch (e) {
       print("Error clearing user data: $e");
     }

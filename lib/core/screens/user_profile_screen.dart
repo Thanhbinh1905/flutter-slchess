@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_slchess/core/models/user.dart';
-import 'package:flutter_slchess/core/services/cognito_auth_service.dart';
+import 'package:flutter_slchess/core/services/amplify_auth_service.dart';
 import 'package:flutter_slchess/core/services/userService.dart';
 import 'dart:io';
 
@@ -13,7 +13,7 @@ class UserProfileScreen extends StatefulWidget {
 
 class _UserProfileScreenState extends State<UserProfileScreen> {
   final UserService _userService = UserService();
-  final CognitoAuth _cognitoAuth = CognitoAuth();
+  final AmplifyAuthService _authService = AmplifyAuthService();
   UserModel? _user;
   bool _isLoading = true;
   File? _selectedImage;
@@ -25,6 +25,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   }
 
   Future<void> _loadUserData() async {
+    if (!mounted) return;
+
     setState(() {
       _isLoading = true;
     });
@@ -38,12 +40,13 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
       if (user == null) {
         print("Không tìm thấy user trong Hive, thử lấy từ API...");
-        final String? accessToken = await _cognitoAuth.getStoredAccessToken();
-        final String? idToken = await _cognitoAuth.getStoredIdToken();
+        final String? accessToken = await _authService.getAccessToken();
+        final String? idToken = await _authService.getIdToken();
 
         if (accessToken != null && idToken != null) {
           await _userService.saveSelfUserInfo(accessToken, idToken);
           final refreshedUser = await _userService.getPlayer();
+          if (!mounted) return;
           setState(() {
             _user = refreshedUser;
             _isLoading = false;
@@ -52,6 +55,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           throw Exception("Không thể lấy token đăng nhập");
         }
       } else {
+        if (!mounted) return;
         setState(() {
           _user = user;
           _isLoading = false;
@@ -59,6 +63,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       }
     } catch (e) {
       print("Lỗi chi tiết khi tải thông tin người dùng: $e");
+      if (!mounted) return;
       setState(() {
         _isLoading = false;
       });
@@ -72,15 +77,14 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
   Future<void> _selectImage() async {
     // Điều hướng đến màn hình upload ảnh
-    Navigator.pushNamed(context, '/uploadImage');
+    await Navigator.pushNamed(context, '/uploadImage');
+    // Sau khi trở về từ màn hình upload, tải lại thông tin người dùng
+    await _loadUserData();
   }
 
   void _logout() async {
     try {
-      await _cognitoAuth.clearTokens();
-      if (mounted) {
-        Navigator.pushReplacementNamed(context, '/login');
-      }
+      await _authService.signOut();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -93,21 +97,26 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
     }
 
     if (_user == null) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Text('Không thể tải thông tin người dùng'),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: _loadUserData,
-              child: const Text('Thử lại'),
-            ),
-          ],
+      return Scaffold(
+        appBar: AppBar(title: const Text('Thông tin cá nhân')),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Text('Không thể tải thông tin người dùng'),
+              const SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: _loadUserData,
+                child: const Text('Thử lại'),
+              ),
+            ],
+          ),
         ),
       );
     }
@@ -117,6 +126,11 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         title: const Text('Thông tin cá nhân'),
         backgroundColor: const Color(0xFF0E1416),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.settings),
+            onPressed: _selectImage,
+            tooltip: 'Cài đặt tài khoản',
+          ),
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: _logout,
@@ -151,18 +165,42 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                               shape: BoxShape.circle,
                               color: Colors.white.withOpacity(0.1),
                               border: Border.all(color: Colors.white, width: 2),
-                              image: _user!.picture.isNotEmpty
-                                  ? DecorationImage(
-                                      image: NetworkImage(
-                                          "${_user!.picture}/large"),
-                                      fit: BoxFit.cover,
-                                    )
-                                  : const DecorationImage(
-                                      image:
-                                          AssetImage('assets/default_avt.jpg'),
-                                      fit: BoxFit.cover,
-                                    ),
                             ),
+                            child: _user!.picture.isNotEmpty
+                                ? ClipRRect(
+                                    borderRadius: BorderRadius.circular(60),
+                                    child: Image.network(
+                                      "${_user!.picture}/large",
+                                      key: ValueKey(DateTime.now()
+                                          .millisecondsSinceEpoch),
+                                      fit: BoxFit.cover,
+                                      errorBuilder:
+                                          (context, error, stackTrace) {
+                                        print('Error loading image: $error');
+                                        return const Icon(
+                                          Icons.person,
+                                          size: 80,
+                                          color: Colors.white,
+                                        );
+                                      },
+                                      loadingBuilder:
+                                          (context, child, loadingProgress) {
+                                        if (loadingProgress == null) {
+                                          return child;
+                                        }
+                                        return const Center(
+                                          child: CircularProgressIndicator(
+                                            color: Colors.white,
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  )
+                                : const Icon(
+                                    Icons.person,
+                                    size: 80,
+                                    color: Colors.white,
+                                  ),
                           ),
                           Positioned(
                             bottom: 0,

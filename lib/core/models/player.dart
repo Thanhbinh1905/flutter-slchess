@@ -1,6 +1,6 @@
 import './user.dart';
 import '../services/userService.dart';
-import '../services/cognito_auth_service.dart';
+import '../services/amplify_auth_service.dart';
 
 class Player {
   final UserModel user;
@@ -19,11 +19,11 @@ class Player {
       this.isConnect = false});
 
   static Future<Player> fromJson(Map<String, dynamic> json) async {
-    final cognitoAuth = CognitoAuth();
     final userService = UserService();
+    final amplifyAuthService = AmplifyAuthService();
 
     try {
-      final storedIdToken = await cognitoAuth.getStoredIdToken();
+      final storedIdToken = await amplifyAuthService.getIdToken();
       final user = await userService.getUserInfo(json['id'], storedIdToken!);
 
       return Player(

@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_slchess/core/models/chessboard_model.dart';
-import 'package:flutter_slchess/core/services/cognito_auth_service.dart';
+import 'package:flutter_slchess/core/services/amplify_auth_service.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:flutter_slchess/core/models/puzzle_model.dart';
+import 'package:amplify_flutter/amplify_flutter.dart';
 import 'core/screens/login_screen.dart';
 import 'core/screens/homescreen.dart';
 import 'core/screens/chessboard.dart';
@@ -27,15 +28,67 @@ Future<void> main() async {
   Hive.registerAdapter(UserModelAdapter());
   Hive.registerAdapter(MembershipAdapter());
 
-  runApp(const MyApp());
-}
+  // Khởi tạo AmplifyAuthService instance để đảm bảo singleton được tạo sớm
+  final authService = AmplifyAuthService();
 
-Future<void> handleWebCallback() async {
-  final uri = Uri.base;
-  final code = uri.queryParameters['code'];
-  if (code != null) {
-    await CognitoAuth().getToken(code);
+  // Khởi tạo Amplify với xử lý lỗi toàn diện
+  bool amplifyInitialized = false;
+  int attempts = 0;
+  const maxAttempts = 2;
+
+  while (!amplifyInitialized && attempts < maxAttempts) {
+    attempts++;
+    try {
+      print('Đang khởi tạo Amplify (lần thử $attempts)...');
+      await authService.initializeAmplify();
+      amplifyInitialized = true;
+      print('✅ Amplify đã được khởi tạo thành công trong main()');
+
+      // Kiểm tra xem Auth plugin có hoạt động không
+      try {
+        await Amplify.Auth.fetchAuthSession();
+        print('✅ Auth plugin hoạt động tốt');
+      } catch (e) {
+        if (e.toString().contains('Auth plugin has not been added')) {
+          print('❌ Auth plugin chưa được thêm vào Amplify');
+          amplifyInitialized = false; // Đánh dấu là chưa khởi tạo thành công
+        } else {
+          print('⚠️ Lỗi khi kiểm tra Auth session: $e');
+          // Có thể chưa đăng nhập, nhưng plugin vẫn hoạt động
+        }
+      }
+    } catch (e) {
+      // Nếu lỗi là "đã được cấu hình" thì vẫn coi như thành công
+      if (e.toString().contains('already been configured')) {
+        print('✅ Amplify đã được cấu hình trước đó, tiếp tục');
+        amplifyInitialized = true;
+
+        // Kiểm tra xem Auth plugin có hoạt động không
+        try {
+          await Amplify.Auth.fetchAuthSession();
+          print('✅ Auth plugin hoạt động tốt');
+        } catch (e2) {
+          if (e2.toString().contains('Auth plugin has not been added')) {
+            print('❌ Auth plugin chưa được thêm vào Amplify đã cấu hình');
+            amplifyInitialized = false; // Khởi tạo không thành công
+          } else {
+            print('⚠️ Lỗi khi kiểm tra Auth session: $e2');
+            // Có thể chưa đăng nhập, nhưng plugin vẫn hoạt động
+          }
+        }
+      } else {
+        print('❌ Lỗi khởi tạo Amplify: $e');
+      }
+    }
+
+    // Nếu không thành công và còn lần thử, đợi một chút
+    if (!amplifyInitialized && attempts < maxAttempts) {
+      print('⏳ Đợi trước khi thử lại...');
+      await Future.delayed(const Duration(milliseconds: 500));
+    }
   }
+
+  runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
