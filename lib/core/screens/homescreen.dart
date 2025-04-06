@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_slchess/core/widgets/widgets.dart';
 
 import 'play_screen.dart';
 import 'puzzle_screen.dart';

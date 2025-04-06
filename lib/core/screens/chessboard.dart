@@ -3,16 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:chess/chess.dart' as chess;
 import 'package:flutter_slchess/core/models/match_model.dart';
 import 'package:flutter_slchess/core/models/gamestate_model.dart';
-import 'package:flutter_slchess/core/services/matchmaking_service.dart';
 import 'package:flutter_slchess/core/services/match_ws_service.dart';
 import 'package:flutter_slchess/core/services/cognito_auth_service.dart';
-import '../widgets/error_dialog.dart';
 
 import 'dart:async';
 import 'dart:math' as math;
-import 'dart:convert';
-
-import 'package:web_socket_channel/web_socket_channel.dart';
 
 class Chessboard extends StatefulWidget {
   final MatchModel matchModel;

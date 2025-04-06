@@ -3,7 +3,6 @@ import 'package:flutter_slchess/core/models/user.dart';
 import 'package:flutter_slchess/core/services/cognito_auth_service.dart';
 import 'package:flutter_slchess/core/services/userService.dart';
 import 'dart:io';
-import 'package:image_picker/image_picker.dart';
 
 class UserProfileScreen extends StatefulWidget {
   const UserProfileScreen({super.key});

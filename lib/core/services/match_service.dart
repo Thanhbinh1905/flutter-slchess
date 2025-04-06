@@ -1,7 +1,6 @@
 import 'dart:convert';
 import '../models/match_model.dart';
 import '../models/player.dart';
-import './userService.dart';
 
 class MatchService {
   Future<MatchModel> getMatchFromJson(String jsonString) {

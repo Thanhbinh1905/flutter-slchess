@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_slchess/core/models/puzzle_model.dart';
 import 'package:flutter_slchess/core/services/puzzle_service.dart';
 import 'package:flutter_slchess/core/services/cognito_auth_service.dart';
-import 'package:flutter_slchess/core/widgets/error_dialog.dart';
-import 'package:flutter_slchess/core/models/chessboard_model.dart';
 
 class PuzzleScreen extends StatefulWidget {
   const PuzzleScreen({super.key});

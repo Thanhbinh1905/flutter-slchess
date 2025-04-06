@@ -22,9 +22,9 @@ class Move {
     if (isCapture) pgn += 'x';
     pgn += to;
     if (promotion != null) pgn += '=$promotion';
-    if (isCheckmate)
+    if (isCheckmate) {
       pgn += '#';
-    else if (isCheck) pgn += '+';
+    } else if (isCheck) pgn += '+';
 
     return pgn;
   }

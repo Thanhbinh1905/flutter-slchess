@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_slchess/core/models/chessboard_model.dart';
 import 'package:flutter_slchess/core/services/cognito_auth_service.dart';
-import 'package:hive/hive.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:flutter_slchess/core/models/puzzle_model.dart';
 import 'core/screens/login_screen.dart';
@@ -35,7 +34,7 @@ Future<void> handleWebCallback() async {
   final uri = Uri.base;
   final code = uri.queryParameters['code'];
   if (code != null) {
-    await CognitoAuth().getToken(code); // Đợi lấy token xong
+    await CognitoAuth().getToken(code);
   }
 }
 
