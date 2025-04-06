@@ -2,6 +2,34 @@ import 'package:hive/hive.dart';
 
 part 'puzzle_model.g.dart';
 
+@HiveType(typeId: 1)
+class PuzzleProfile {
+  @HiveField(0)
+  final String userId;
+
+  @HiveField(1)
+  final int rating;
+
+  PuzzleProfile({
+    required this.userId,
+    required this.rating,
+  });
+
+  factory PuzzleProfile.fromJson(Map<String, dynamic> json) {
+    return PuzzleProfile(
+      userId: json['userId'],
+      rating: json['rating'],
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'puzzleid': userId,
+      'rating': rating,
+    };
+  }
+}
+
 class Puzzles {
   final List<Puzzle> puzzles;
 

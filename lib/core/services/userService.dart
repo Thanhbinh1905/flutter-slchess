@@ -104,13 +104,18 @@ class UserService {
       }
 
       final box = await Hive.openBox<UserModel>(USER_BOX);
-      UserModel? user = box.get('currentPlayer');
-      if (user != null) {
-        print("Retrieved user: ${user.username}");
+      dynamic rawValue = box.get('currentPlayer');
+
+      // Check if the retrieved object is of the correct type
+      if (rawValue is UserModel) {
+        print("Retrieved user: ${rawValue.username}");
+        return rawValue;
       } else {
-        print("No user found in Hive box");
+        print("Wrong type found in Hive box: ${rawValue.runtimeType}");
+        // Clean up the corrupted data
+        await box.delete('currentPlayer');
+        return null;
       }
-      return user;
     } catch (e) {
       print("Error retrieving player from Hive: $e");
       return null;

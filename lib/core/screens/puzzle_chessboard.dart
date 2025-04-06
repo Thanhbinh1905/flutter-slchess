@@ -28,6 +28,8 @@ class _PuzzleChessboardState extends State<PuzzleChessboard> {
   bool isPuzzleSolved = false;
   bool isPuzzleFailed = false;
   String? message;
+  String? lastMoveFrom;
+  String? lastMoveTo;
 
   // Các biến UI
   Set<String> validSquares = {};
@@ -68,10 +70,6 @@ class _PuzzleChessboardState extends State<PuzzleChessboard> {
     isWhite = widget.puzzle.fen.contains(' w ');
     isPlayerTurn = false;
 
-    setState(() {
-      message = "Đợi máy thực hiện nước đi đầu tiên...";
-    });
-
     // Đợi 1 giây rồi thực hiện nước đi đầu tiên của máy
     Timer(const Duration(seconds: 1), () {
       if (solutionMoves.isNotEmpty) {
@@ -83,7 +81,7 @@ class _PuzzleChessboardState extends State<PuzzleChessboard> {
   void _handleSquareSelected(String coor) {
     if (!isPlayerTurn || isPuzzleSolved || isPuzzleFailed) return;
 
-    if (selectedSquare == null) {
+    if (selectedSquare == null || !validSquares.contains(coor)) {
       // Chọn quân cờ
       final row = 8 - int.parse(coor[1]);
       final col = coor.codeUnitAt(0) - 'a'.codeUnitAt(0);
@@ -109,7 +107,9 @@ class _PuzzleChessboardState extends State<PuzzleChessboard> {
   }
 
   void _handleMove(String to) {
-    if (selectedSquare == null || !isPlayerTurn) return;
+    if (selectedSquare == null || !isPlayerTurn || !validSquares.contains(to)) {
+      return;
+    }
 
     final from = selectedSquare!;
 
@@ -125,7 +125,6 @@ class _PuzzleChessboardState extends State<PuzzleChessboard> {
     if (validMove != null) {
       String moveAlgebraic = validMove.fromAlgebraic + validMove.toAlgebraic;
 
-      // Kiểm tra nước đi có đúng với nước đi tiếp theo trong solutionMoves không
       if (currentMoveIndex < solutionMoves.length &&
           moveAlgebraic != solutionMoves[currentMoveIndex]) {
         setState(() {
@@ -164,10 +163,14 @@ class _PuzzleChessboardState extends State<PuzzleChessboard> {
   }
 
   void _makeMove(chess.Move move) {
-    game.move(move);
     setState(() {
+      lastMoveFrom = move.fromAlgebraic;
+      lastMoveTo = move.toAlgebraic;
+      game.move(move);
       board = parseFEN(game.fen);
     });
+    selectedSquare = null;
+    validSquares = {};
   }
 
   void _makeOpponentMove() {
@@ -221,6 +224,8 @@ class _PuzzleChessboardState extends State<PuzzleChessboard> {
       isPuzzleSolved = false;
       isPuzzleFailed = false;
       message = null;
+      lastMoveFrom = null;
+      lastMoveTo = null;
     });
   }
 
@@ -234,7 +239,12 @@ class _PuzzleChessboardState extends State<PuzzleChessboard> {
         iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: Container(
-        color: const Color(0xFF1A1B1A),
+        decoration: const BoxDecoration(
+          image: DecorationImage(
+            image: AssetImage('assets/bg_dark.png'),
+            fit: BoxFit.cover,
+          ),
+        ),
         child: Column(
           children: [
             // Status bar
@@ -257,19 +267,7 @@ class _PuzzleChessboardState extends State<PuzzleChessboard> {
             ),
 
             // Chessboard
-            Expanded(
-              child: GridView.builder(
-                padding: const EdgeInsets.all(2),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 8,
-                ),
-                itemCount: 64,
-                physics: const NeverScrollableScrollPhysics(),
-                itemBuilder: (context, index) {
-                  return _buildChessSquare(index);
-                },
-              ),
-            ),
+            _buildChessboard(),
 
             // Message
             if (message != null)
@@ -341,31 +339,170 @@ class _PuzzleChessboardState extends State<PuzzleChessboard> {
     );
   }
 
+  Widget _buildChessboard() {
+    return Stack(
+      children: [
+        Center(
+          child: AspectRatio(
+            aspectRatio: 1,
+            child: GridView.builder(
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 8,
+                childAspectRatio: 1.0,
+              ),
+              itemCount: 64,
+              itemBuilder: (context, index) => _buildChessSquare(index),
+            ),
+          ),
+        ),
+        _buildFileCoordinates(),
+        _buildRankCoordinates()
+      ],
+    );
+  }
+
+  Widget _buildRankCoordinates() {
+    return Positioned.fill(
+      child: Column(
+        children: List.generate(8, (row) {
+          return Expanded(
+            child: Align(
+              alignment: Alignment.topLeft,
+              child: Padding(
+                padding: const EdgeInsets.only(left: 2, top: 2),
+                child: Text(
+                  isWhite ? "${8 - row}" : "${row + 1}",
+                  style: TextStyle(
+                    fontSize: 8,
+                    fontWeight: FontWeight.bold,
+                    color: (row % 2 == 0) ? Colors.grey : Colors.white,
+                  ),
+                ),
+              ),
+            ),
+          );
+        }),
+      ),
+    );
+  }
+
+  Widget _buildFileCoordinates() {
+    return Positioned.fill(
+      child: Row(
+        children: List.generate(8, (col) {
+          return Expanded(
+            child: Align(
+              alignment: Alignment.bottomRight,
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 2, right: 2),
+                child: Text(
+                  isWhite
+                      ? String.fromCharCode(97 + col)
+                      : String.fromCharCode(104 - col),
+                  style: TextStyle(
+                    fontSize: 8,
+                    fontWeight: FontWeight.bold,
+                    color: (col % 2 == 0) ? Colors.white : Colors.grey,
+                  ),
+                ),
+              ),
+            ),
+          );
+        }),
+      ),
+    );
+  }
+
   Widget _buildChessSquare(int index) {
-    int transformedIndex = enableFlip && !isWhite ? 63 - index : index;
+    int transformedIndex = isWhite ? 63 - index : index;
     int row = transformedIndex ~/ 8;
     int col = transformedIndex % 8;
     String coor = parsePieceCoordinate(col, row);
     bool isValidSquare = validSquares.contains(coor);
+    bool isLastMoveFrom = coor == lastMoveFrom;
+    bool isLastMoveTo = coor == lastMoveTo;
     String? piece = board[row][col];
 
-    return GestureDetector(
-      onTap: () => _handleSquareSelected(coor),
-      child: Container(
-        decoration: BoxDecoration(
-          color: (row + col) % 2 == 0
-              ? const Color(0xFFEEEED2) // Màu ô trắng
-              : const Color(0xFF769656), // Màu ô xanh
-          border: Border.all(
-            color: isValidSquare ? Colors.green : Colors.transparent,
-            width: isValidSquare ? 2 : 0,
+    return DragTarget<String>(
+      onWillAcceptWithDetails: (data) => isValidSquare,
+      onAcceptWithDetails: (data) => _handleMove(coor),
+      builder: (context, candidateData, rejectedData) {
+        return GestureDetector(
+          onTap: () => _handleSquareSelected(coor),
+          child: Container(
+            decoration: BoxDecoration(
+              color: (row + col) % 2 == 0
+                  ? const Color(0xFFEEEED2) // Màu ô trắng
+                  : const Color(0xFF769656), // Màu ô xanh
+              border: Border.all(
+                color: isValidSquare
+                    ? Colors.green
+                    : isLastMoveFrom || isLastMoveTo
+                        ? Colors.blueAccent
+                        : Colors.transparent,
+                width: isValidSquare || isLastMoveFrom || isLastMoveTo ? 2 : 0,
+              ),
+              boxShadow: isLastMoveTo
+                  ? [
+                      BoxShadow(
+                        color: Colors.blue.withOpacity(0.4),
+                        spreadRadius: 1,
+                        blurRadius: 2,
+                      )
+                    ]
+                  : null,
+            ),
+            child: Center(
+              child: _buildDraggablePiece(piece, coor),
+            ),
           ),
-        ),
-        child: Center(
-          child: piece != null
-              ? Image.asset(getPieceAsset(piece), width: 35, height: 35)
-              : null,
-        ),
+        );
+      },
+    );
+  }
+
+  Widget _buildDraggablePiece(String? piece, String coor) {
+    if (piece == null) return const SizedBox.shrink();
+
+    final canDrag = isPlayerTurn &&
+        !isPuzzleSolved &&
+        !isPuzzleFailed &&
+        ((piece.toUpperCase() == piece) == isWhite);
+
+    if (!canDrag) {
+      return Image.asset(
+        getPieceAsset(piece),
+        fit: BoxFit.contain,
+      );
+    }
+
+    return Draggable<String>(
+      data: coor,
+      feedback: Image.asset(
+        getPieceAsset(piece),
+        width: 50,
+        height: 50,
+      ),
+      childWhenDragging: const SizedBox.shrink(),
+      onDragStarted: () {
+        setState(() {
+          selectedSquare = coor;
+          validMoves = _genMove(coor, game);
+          validSquares = _generateValidSquares(validMoves);
+        });
+      },
+      onDragEnd: (details) {
+        if (!details.wasAccepted) {
+          setState(() {
+            selectedSquare = null;
+            validSquares = {};
+          });
+        }
+      },
+      child: Image.asset(
+        getPieceAsset(piece),
+        fit: BoxFit.contain,
       ),
     );
   }

@@ -18,11 +18,20 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
   List<Puzzle>? _puzzles;
   bool _isLoading = true;
   String? _errorMessage;
+  PuzzleProfile? _puzzleProfile;
 
   @override
   void initState() {
     super.initState();
-    _loadPuzzles();
+    _loadPuzzlesAndProfile();
+  }
+
+  Future<void> _loadPuzzlesAndProfile() async {
+    // Load both puzzles and profile together
+    await Future.wait([
+      _loadPuzzles(),
+      _loadPuzzleProfile(),
+    ]);
   }
 
   Future<void> _loadPuzzles() async {
@@ -49,6 +58,25 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
         _errorMessage = e.toString();
         _isLoading = false;
       });
+    }
+  }
+
+  Future<void> _loadPuzzleProfile() async {
+    try {
+      final String? idToken = await _cognitoAuth.getStoredIdToken();
+      if (idToken == null) {
+        return;
+      }
+
+      final profile =
+          await _puzzleService.getPuzzleRatingFromCacheOrAPI(idToken);
+
+      print("Puzzle Profile: ${profile.rating}");
+      setState(() {
+        _puzzleProfile = profile;
+      });
+    } catch (e) {
+      print("Lỗi khi tải puzzle profile: $e");
     }
   }
 
@@ -90,8 +118,9 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
 
         // Nếu có kết quả trả về và kết quả là true (puzzle đã được giải)
         if (result == true) {
-          // Làm mới danh sách puzzle
+          // Làm mới danh sách puzzle và profile
           _loadPuzzles();
+          _loadPuzzleProfile();
         }
       } else {
         throw Exception("Không thể tạo tham số cho màn hình puzzle");
@@ -128,7 +157,37 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
   Widget build(BuildContext context) {
     return Container(
       color: const Color(0xFF1A1B1A),
-      child: _buildBody(),
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            color: const Color(0xFF2A2B2A),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Text(
+                  'Puzzle Rating: ',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                Text(
+                  _puzzleProfile?.rating.toString() ?? '0',
+                  style: const TextStyle(
+                    color: Colors.orange,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: _buildBody(),
+          ),
+        ],
+      ),
     );
   }
 
@@ -166,16 +225,50 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
       );
     }
 
-    return RefreshIndicator(
-      onRefresh: _loadPuzzles,
-      child: ListView.builder(
-        itemCount: _puzzles!.length,
-        itemBuilder: (context, index) {
-          final puzzle = _puzzles![index];
-          return _buildPuzzleItem(puzzle);
-        },
+    // Instead of showing a list, show a button to solve a random puzzle
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Text(
+            'Giải một bài toán cờ ngẫu nhiên',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 30),
+          ElevatedButton(
+            onPressed: _openRandomPuzzle,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green,
+              padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 16),
+              textStyle: const TextStyle(fontSize: 18),
+            ),
+            child: const Text('Bắt đầu'),
+          ),
+          const SizedBox(height: 50),
+          if (_puzzleProfile != null)
+            Text(
+              'Bạn đã giải ${(_puzzleProfile!.rating - 300) ~/ 10} bài toán cờ',
+              style: const TextStyle(
+                color: Colors.grey,
+                fontSize: 16,
+              ),
+            ),
+        ],
       ),
     );
+  }
+
+  void _openRandomPuzzle() {
+    if (_puzzles != null && _puzzles!.isNotEmpty) {
+      // Get a random puzzle from the list
+      final random = DateTime.now().millisecondsSinceEpoch % _puzzles!.length;
+      final puzzle = _puzzles![random];
+      _openPuzzle(puzzle);
+    }
   }
 
   Widget _buildPuzzleItem(Puzzle puzzle) {

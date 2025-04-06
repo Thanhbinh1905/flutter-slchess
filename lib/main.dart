@@ -24,12 +24,9 @@ Future<void> main() async {
   // Khởi tạo Hive và đăng ký adapter
   await Hive.initFlutter();
   Hive.registerAdapter(PuzzleAdapter());
+  Hive.registerAdapter(PuzzleProfileAdapter());
   Hive.registerAdapter(UserModelAdapter());
   Hive.registerAdapter(MembershipAdapter());
-
-  // if (kIsWeb) {
-  //   await handleWebCallback(); // Chờ xử lý callback trước khi chạy app
-  // }
 
   runApp(const MyApp());
 }
@@ -90,7 +87,6 @@ class MyApp extends StatelessWidget {
                 ),
               );
             } else {
-              print("Lỗi: Tham số truyền vào không đúng định dạng: $args");
               return MaterialPageRoute(
                 builder: (context) => const Scaffold(
                   body: Center(

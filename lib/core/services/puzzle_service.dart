@@ -1,12 +1,15 @@
+import 'package:flutter_slchess/core/models/user.dart';
 import 'package:http/http.dart' as http;
 import 'package:hive/hive.dart';
 import '../constants/constants.dart';
 import '../models/puzzle_model.dart';
+import '../services/userService.dart';
 import 'dart:convert';
 
 class PuzzleService {
   static String getPuzzlesUrlApi = ApiConstants.getPulzzesUrl;
   static String getPuzzleUrlApi = ApiConstants.getPulzzeUrl;
+  static String getPuzzleProfileUrlApi = "${ApiConstants.getPulzzeUrl}/profile";
 
   Future<Puzzles> getPuzzles(String idToken, {int limit = 10}) async {
     try {
@@ -113,11 +116,27 @@ class PuzzleService {
         headers: {'Authorization': 'Bearer $idToken'},
       );
 
-      print(response.statusCode);
+      print(response.body);
 
       if (response.statusCode == 200) {
-        final newRating = jsonDecode(response.body);
+        final newRating = jsonDecode(response.body)['newRating'];
         print("Điểm Puzzle Rating mới của bạn sau khi giải: $newRating");
+
+        // Get the current user
+        final userService = UserService();
+        final user = await userService.getPlayer();
+
+        if (user != null) {
+          // Create a PuzzleProfile with the actual user ID and new rating
+          final puzzleProfile = PuzzleProfile(
+            userId: user.id,
+            rating: newRating,
+          );
+          await updatePuzzleRating(newRating, puzzleProfile);
+
+          // Print confirmation of updated profile
+          print("Updated puzzle profile: userId=${user.id}, rating=$newRating");
+        }
       } else {
         throw Exception(
             'Không thể đánh dấu puzzle đã giải: ${response.statusCode}');
@@ -130,6 +149,97 @@ class PuzzleService {
     } catch (error) {
       print("Lỗi khi đánh dấu puzzle đã giải: $error");
       throw Exception('Không thể đánh dấu puzzle đã giải: $error');
+    }
+  }
+
+  Future<PuzzleProfile> getPuzzleProfile(String idToken) async {
+    final response = await http.get(
+      Uri.parse(getPuzzleProfileUrlApi),
+      headers: {'Authorization': 'Bearer $idToken'},
+    );
+
+    if (response.statusCode == 200) {
+      final Map<String, dynamic> responseData = jsonDecode(response.body);
+      final puzzleProfile = PuzzleProfile.fromJson(responseData);
+      await savePuzzleProfile(puzzleProfile);
+      return puzzleProfile;
+    }
+    throw Exception('Không thể lấy profile puzzle: ${response.statusCode}');
+  }
+
+  Future<void> updatePuzzleRating(
+      int newRating, PuzzleProfile puzzleProfile) async {
+    final box = await Hive.openBox<PuzzleProfile>('puzzleProfileBox');
+    await box.put(puzzleProfile.userId, puzzleProfile);
+  }
+
+  Future<void> deletePuzzleProfile(PuzzleProfile puzzleProfile) async {
+    final box = await Hive.openBox<PuzzleProfile>('puzzleProfileBox');
+    await box.delete(puzzleProfile.userId);
+  }
+
+  Future<void> savePuzzleProfile(PuzzleProfile puzzleProfile) async {
+    final box = await Hive.openBox<PuzzleProfile>('puzzleProfileBox');
+    await box.put(puzzleProfile.userId, puzzleProfile);
+  }
+
+  Future<int> getPuzzleRatingFromCache(UserModel user) async {
+    final userId = user.id;
+    final box = await Hive.openBox<PuzzleProfile>('puzzleProfileBox');
+    final puzzleProfile = box.get(userId);
+    if (puzzleProfile != null) {
+      return puzzleProfile.rating;
+    }
+    return 0; // Trả về giá trị mặc định nếu không tìm thấy
+  }
+
+  Future<PuzzleProfile> getPuzzleRatingFromCacheOrAPI(String idToken) async {
+    try {
+      // Get current user ID
+      final userService = UserService();
+      final user = await userService.getPlayer();
+
+      // Try to get from cache first
+      if (user != null) {
+        final box = await Hive.openBox<PuzzleProfile>('puzzleProfileBox');
+        final cachedProfile = box.get(user.id);
+        if (cachedProfile != null) {
+          print("Found puzzle profile in cache: ${cachedProfile.rating}");
+          return cachedProfile;
+        }
+      }
+
+      // If not found in cache, fetch from API
+      print("Fetching puzzle profile from API...");
+      final apiProfile = await getPuzzleProfile(idToken);
+      return apiProfile;
+    } catch (error) {
+      print("Error getting puzzle profile: $error");
+      // If error occurs, try direct API call
+      return await getPuzzleProfile(idToken);
+    }
+  }
+
+  /// Clears all puzzle-related cached data
+  /// Call this when a new user logs in
+  Future<void> clearAllPuzzleCaches() async {
+    try {
+      // Clear puzzle profiles
+      if (Hive.isBoxOpen('puzzleProfileBox')) {
+        final profileBox =
+            await Hive.openBox<PuzzleProfile>('puzzleProfileBox');
+        await profileBox.clear();
+        print("Puzzle profile cache cleared");
+      }
+
+      // Clear puzzles list
+      if (Hive.isBoxOpen('puzzleBox')) {
+        final puzzleBox = await Hive.openBox<Puzzle>('puzzleBox');
+        await puzzleBox.clear();
+        print("Puzzles cache cleared");
+      }
+    } catch (error) {
+      print("Error clearing puzzle caches: $error");
     }
   }
 }

@@ -40,6 +40,8 @@ class _ChessboardState extends State<Chessboard> {
   late String fen;
   bool isWhiteTurn = true;
   bool isPaused = false;
+  String? lastMoveFrom;
+  String? lastMoveTo;
 
   // Time control
   late String timeControl;
@@ -168,6 +170,15 @@ class _ChessboardState extends State<Chessboard> {
       whiteTime = gameState.clocks[0];
       blackTime = gameState.clocks[1];
       isWhiteTurn = game.turn.name == "WHITE";
+
+      // Kiểm tra xem có nước đi mới từ server không
+      if (gameState.lastMove != null) {
+        // Nước đi có dạng "e2e4"
+        if (gameState.lastMove!.length >= 4) {
+          lastMoveFrom = gameState.lastMove!.substring(0, 2);
+          lastMoveTo = gameState.lastMove!.substring(2, 4);
+        }
+      }
     });
   }
 
@@ -428,6 +439,8 @@ class _ChessboardState extends State<Chessboard> {
     int col = transformedIndex % 8;
     String coor = parsePieceCoordinate(col, row);
     bool isValidSquare = validSquares.contains(coor);
+    bool isLastMoveFrom = coor == lastMoveFrom;
+    bool isLastMoveTo = coor == lastMoveTo;
     String? piece = board[row][col];
 
     return DragTarget<String>(
@@ -442,9 +455,22 @@ class _ChessboardState extends State<Chessboard> {
                   ? const Color(0xFFEEEED2) // Màu ô trắng
                   : const Color(0xFF769656), // Màu ô xanh
               border: Border.all(
-                color: isValidSquare ? Colors.green : Colors.transparent,
-                width: isValidSquare ? 2 : 0,
+                color: isValidSquare
+                    ? Colors.green
+                    : isLastMoveFrom || isLastMoveTo
+                        ? Colors.blueAccent
+                        : Colors.transparent,
+                width: isValidSquare || isLastMoveFrom || isLastMoveTo ? 2 : 0,
               ),
+              boxShadow: isLastMoveTo
+                  ? [
+                      BoxShadow(
+                        color: Colors.blue.withOpacity(0.3),
+                        spreadRadius: 1,
+                        blurRadius: 2,
+                      )
+                    ]
+                  : null,
             ),
             child: Center(
               child: _buildDraggablePiece(piece, coor),
@@ -557,7 +583,6 @@ class _ChessboardState extends State<Chessboard> {
     }
 
     if (isOnline && isWhiteTurn != isWhite) {
-      // Có thể hiển thị snackbar thông báo "Chờ lượt đối thủ"
       return;
     }
 
@@ -587,6 +612,10 @@ class _ChessboardState extends State<Chessboard> {
       fen = game.fen;
       listFen.add(fen);
       board = parseFEN(fen);
+
+      // Lưu thông tin nước đi gần nhất
+      lastMoveFrom = selectedSquare;
+      lastMoveTo = coor;
 
       // Tăng thời gian sau khi di chuyển
       if (isWhiteTurn) {

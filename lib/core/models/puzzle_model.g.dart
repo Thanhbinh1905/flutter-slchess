@@ -6,6 +6,43 @@ part of 'puzzle_model.dart';
 // TypeAdapterGenerator
 // **************************************************************************
 
+class PuzzleProfileAdapter extends TypeAdapter<PuzzleProfile> {
+  @override
+  final int typeId = 1;
+
+  @override
+  PuzzleProfile read(BinaryReader reader) {
+    final numOfFields = reader.readByte();
+    final fields = <int, dynamic>{
+      for (int i = 0; i < numOfFields; i++) reader.readByte(): reader.read(),
+    };
+    return PuzzleProfile(
+      userId: fields[0] as String,
+      rating: fields[1] as int,
+    );
+  }
+
+  @override
+  void write(BinaryWriter writer, PuzzleProfile obj) {
+    writer
+      ..writeByte(2)
+      ..writeByte(0)
+      ..write(obj.userId)
+      ..writeByte(1)
+      ..write(obj.rating);
+  }
+
+  @override
+  int get hashCode => typeId.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is PuzzleProfileAdapter &&
+          runtimeType == other.runtimeType &&
+          typeId == other.typeId;
+}
+
 class PuzzleAdapter extends TypeAdapter<Puzzle> {
   @override
   final int typeId = 0;

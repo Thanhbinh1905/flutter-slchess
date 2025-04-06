@@ -72,17 +72,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   }
 
   Future<void> _selectImage() async {
-    final picker = ImagePicker();
-    final pickedFile = await picker.pickImage(source: ImageSource.gallery);
-
-    if (pickedFile != null) {
-      setState(() {
-        _selectedImage = File(pickedFile.path);
-      });
-
-      // Điều hướng đến màn hình upload ảnh
-      Navigator.pushNamed(context, '/uploadImage');
-    }
+    // Điều hướng đến màn hình upload ảnh
+    Navigator.pushNamed(context, '/uploadImage');
   }
 
   void _logout() async {

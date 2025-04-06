@@ -8,6 +8,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:encrypted_shared_preferences/encrypted_shared_preferences.dart';
 import '../../main.dart';
 import './userService.dart';
+import './puzzle_service.dart';
 import 'package:jwt_decoder/jwt_decoder.dart';
 
 class CognitoAuth {
@@ -28,7 +29,7 @@ class CognitoAuth {
   Future<void> initAppLinks() async {
     _appLinks = AppLinks();
 
-    await _checkTokenAndNavigate();
+    // await _checkTokenAndNavigate();
 
     final uri = await _appLinks.getInitialAppLink();
 
@@ -119,6 +120,10 @@ class CognitoAuth {
           storage.setString(ID_TOKEN_KEY, tokens['id_token']),
           storage.setString(REFRESH_TOKEN_KEY, tokens['refresh_token']),
         ]);
+
+        // Clear all puzzle caches for new user
+        final puzzleService = PuzzleService();
+        await puzzleService.clearAllPuzzleCaches();
 
         await userService.saveSelfUserInfo(
           tokens['access_token'],

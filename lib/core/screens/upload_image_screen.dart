@@ -4,6 +4,8 @@ import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../constants/constants.dart';
+import 'package:flutter_slchess/core/services/cognito_auth_service.dart';
+import 'package:flutter_slchess/core/services/image_service.dart';
 
 class UploadImageScreen extends StatefulWidget {
   const UploadImageScreen({super.key});
@@ -15,10 +17,8 @@ class UploadImageScreen extends StatefulWidget {
 class _UploadImageScreenState extends State<UploadImageScreen> {
   File? _image;
   String? _uploadedImageUrl;
-  final String _idToken =
-      "eyJraWQiOiJcL3I1OU5BYWtWakc0VWtwaFlFcHNlSHZ0bThkaDQyYlJPMFprcU5IV1Uxaz0iLCJhbGciOiJSUzI1NiJ9.eyJhdF9oYXNoIjoiUWNPUjVtWXJRczNxcTM0ZGtXQTY3QSIsInN1YiI6ImE5OGUzNDE4LWIwOTEtNzA3My1kY2FhLWYwZDRmYWI0YWMxNyIsImVtYWlsX3ZlcmlmaWVkIjpmYWxzZSwiaXNzIjoiaHR0cHM6XC9cL2NvZ25pdG8taWRwLmFwLXNvdXRoZWFzdC0yLmFtYXpvbmF3cy5jb21cL2FwLXNvdXRoZWFzdC0yX2Jua0hMazRJeSIsImNvZ25pdG86dXNlcm5hbWUiOiJ0ZXN0dXNlcjIiLCJvcmlnaW5fanRpIjoiMmMyYzdhZmQtZjgwNC00MWUxLThjYjgtZjJmZTBlMGI0NjMzIiwiYXVkIjoiYTc0Mmtpa2ludWdydW1oMTgzbWhqYTduZiIsInRva2VuX3VzZSI6ImlkIiwiYXV0aF90aW1lIjoxNzQzNzY2OTgwLCJleHAiOjE3NDM4NTMzODAsImlhdCI6MTc0Mzc2Njk4MCwianRpIjoiOTllN2E0NzAtMDEwZC00ZTE3LWI2Y2ItNmEyNWE3YzAyZjI4IiwiZW1haWwiOiJ0ZXN0dXNlcjJAZ21haWwuY29tIn0.xs0v7orUyWKHnvO9q7WlB2_wrmcH6FV5VEt9sijdODWLAFgdsADkdn11IZI9wnj_lsQm4-669o7A7Fc8fe5xpALuQGvFVl_bPf_7cGi0M0jEyt51zVnyRgB8EiFSm727_DRDskFQrnYxuicVbnr3vkzP1JFD6YRipjutwa_gG3B1xdVsgl280N0p9x1l26TdrhUAP_RRLjZSWmyk0bSWRS_V7utwPnTmOrzQjp25wSwgL6TLkYyCEEfrsqqXT9v3oWiSfu6D-fnnAX0jUcKW367DwTbHTRWhrvS02HpJFR_RfnTos_JCln0NFr6Lrac9NpV0u9MVkKKm_PfM7Fd4MQ"; // Thay token thật ở đây
-  static final String _presignedUrlApi =
-      ApiConstants.getUploadImageUrl; // API lấy Presigned URL
+  final ImageService _imageService = ImageService();
+  final CognitoAuth _cognitoAuth = CognitoAuth();
 
   /// Chọn ảnh từ thư viện
   Future<void> _pickImage() async {
@@ -32,58 +32,43 @@ class _UploadImageScreenState extends State<UploadImageScreen> {
     }
   }
 
-  /// Lấy Presigned URL từ server
-  Future<String?> _getPresignedUrl() async {
-    try {
-      final response = await http.post(
-        Uri.parse(_presignedUrlApi),
-        headers: {'Authorization': _idToken},
-      );
-
-      if (response.statusCode == 200) {
-        final Map<String, dynamic> responseData = jsonDecode(response.body);
-        return responseData['url'];
-      } else {
-        print('❌ Lỗi lấy Presigned URL: ${response.statusCode}');
-      }
-    } catch (error) {
-      print('❌ Lỗi khi lấy URL: $error');
-    }
-    return null;
-  }
-
-  /// Upload ảnh lên S3
+  /// Upload ảnh lên server
   Future<void> _uploadImage() async {
     if (_image == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Vui lòng chọn ảnh trước!')),
+        const SnackBar(content: Text('Vui lòng chọn ảnh trước')),
       );
       return;
     }
 
-    String? presignedUrl = await _getPresignedUrl();
-    if (presignedUrl == null) return;
-
     try {
-      final bytes = await _image!.readAsBytes();
-      final response = await http.put(
-        Uri.parse(presignedUrl),
-        headers: {'Content-Type': 'image/png'}, // hoặc 'image/jpeg'
-        body: bytes,
-      );
+      final String? idToken = await _cognitoAuth.getStoredIdToken();
+      if (idToken == null) {
+        throw Exception('Vui lòng đăng nhập lại');
+      }
 
-      if (response.statusCode == 200) {
+      // Lấy presigned URL
+      final String presignedUrl = await _imageService.getPresignedUrl(idToken);
+
+      // Upload ảnh
+      final bool success =
+          await _imageService.uploadImage(_image!, presignedUrl);
+
+      if (success) {
         setState(() {
-          _uploadedImageUrl = presignedUrl.split('?')[0]; // Lấy URL hiển thị
+          _uploadedImageUrl = presignedUrl;
         });
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('🎉 Upload thành công!')),
+          const SnackBar(content: Text('Upload ảnh thành công')),
         );
+        Navigator.pop(context);
       } else {
-        print('❌ Upload thất bại: ${response.statusCode}');
+        throw Exception('Upload ảnh thất bại');
       }
-    } catch (error) {
-      print('❌ Lỗi khi upload: $error');
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Lỗi: ${e.toString()}')),
+      );
     }
   }
 
@@ -118,18 +103,6 @@ class _UploadImageScreenState extends State<UploadImageScreen> {
               icon: const Icon(Icons.upload),
               label: const Text("Upload Ảnh"),
             ),
-
-            const SizedBox(height: 20),
-
-            // Hiển thị ảnh đã upload lên server
-            _uploadedImageUrl != null
-                ? Column(
-                    children: [
-                      const Text("Ảnh đã upload:"),
-                      Image.network(_uploadedImageUrl!, height: 150),
-                    ],
-                  )
-                : Container(),
           ],
         ),
       ),

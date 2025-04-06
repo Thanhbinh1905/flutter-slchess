@@ -2,7 +2,7 @@ import 'package:hive/hive.dart';
 
 part 'user.g.dart';
 
-@HiveType(typeId: 1)
+@HiveType(typeId: 2)
 enum Membership {
   @HiveField(0)
   guest,
@@ -10,7 +10,7 @@ enum Membership {
   premium
 }
 
-@HiveType(typeId: 2)
+@HiveType(typeId: 3)
 class UserModel {
   @HiveField(0)
   final String id;
