@@ -70,9 +70,28 @@ class MyApp extends StatelessWidget {
             return MaterialPageRoute(
                 builder: (context) => const UploadImageScreen());
           case '/matchmaking':
-            final gameMode = settings.arguments as String;
-            return MaterialPageRoute(
-                builder: (context) => MatchMakingScreen(gameMode: gameMode));
+            final args = settings.arguments;
+            if (args is Map) {
+              return MaterialPageRoute(
+                builder: (context) => MatchMakingScreen(
+                  gameMode: args['gameMode'],
+                  user: args['user'],
+                ),
+              );
+            } else if (args is String) {
+              // Backwards compatibility for old code
+              return MaterialPageRoute(
+                builder: (context) => MatchMakingScreen(gameMode: args),
+              );
+            } else {
+              return MaterialPageRoute(
+                builder: (context) => const Scaffold(
+                  body: Center(
+                    child: Text('Lỗi: Invalid matchmaking arguments'),
+                  ),
+                ),
+              );
+            }
           case '/profile':
             return MaterialPageRoute(
                 builder: (context) => const UserProfileScreen());

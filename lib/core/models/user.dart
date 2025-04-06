@@ -48,9 +48,9 @@ class UserModel {
       id: json['id'] ?? '',
       username: json['username'] ?? '',
       locate: json['locale'] ?? '',
-      picture: json['phone'] ?? '',
+      picture: json['avatar'] ?? '',
       rating: (json['rating'] as num?)?.toDouble() ?? 0.0,
-      membership: Membership.values.byName(json['membership'] ?? 'guest'),
+      membership: Membership.values.byName(json['membership']),
       createAt: DateTime.tryParse(json['createdAt'] ?? '') ?? DateTime.now(),
     );
   }

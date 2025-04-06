@@ -260,9 +260,9 @@ class _ChessboardState extends State<Chessboard> {
 
   AppBar _buildAppBar() {
     return AppBar(
-      title: const Text(
-        'Offline Chess Games',
-        style: TextStyle(
+      title: Text(
+        '${isOnline ? "Online" : "Offline"} Chess Games',
+        style: const TextStyle(
             fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
       ),
       backgroundColor: const Color(0xFF0E1416),
@@ -274,10 +274,10 @@ class _ChessboardState extends State<Chessboard> {
   }
 
   Widget _buildPlayerPanel(bool isCurrentPlayer) {
-    final playerName = isCurrentPlayer
-        ? matchModel.player1.user.username
-        : matchModel.player2.user.username;
+    final player =
+        isCurrentPlayer ? matchModel.player1.user : matchModel.player2.user;
 
+    final playerName = player.username;
     final time = formatTime(isCurrentPlayer ? whiteTime : blackTime);
 
     return Expanded(
@@ -291,10 +291,13 @@ class _ChessboardState extends State<Chessboard> {
           children: [
             Row(
               children: [
-                Icon(
-                  Icons.supervised_user_circle,
-                  color: Colors.grey.shade300,
-                  size: 24,
+                CircleAvatar(
+                  radius: 16,
+                  backgroundImage: player.picture.isNotEmpty
+                      ? NetworkImage("${player.picture}/small")
+                      : const AssetImage('assets/default_avt.jpg')
+                          as ImageProvider,
+                  backgroundColor: Colors.grey[300],
                 ),
                 const SizedBox(width: 8),
                 Text(

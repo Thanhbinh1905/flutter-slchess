@@ -30,6 +30,8 @@ class _PuzzleChessboardState extends State<PuzzleChessboard> {
   String? message;
   String? lastMoveFrom;
   String? lastMoveTo;
+  String? lastHintMoveFrom;
+  String? lastHintMoveTo;
 
   // Các biến UI
   Set<String> validSquares = {};
@@ -38,6 +40,7 @@ class _PuzzleChessboardState extends State<PuzzleChessboard> {
   bool enableFlip = false;
   bool isWhite = true;
   late ScrollController _scrollController;
+  bool isHint = false;
 
   // Service
   final PuzzleService _puzzleService = PuzzleService();
@@ -226,6 +229,9 @@ class _PuzzleChessboardState extends State<PuzzleChessboard> {
       message = null;
       lastMoveFrom = null;
       lastMoveTo = null;
+      lastHintMoveFrom = null;
+      lastHintMoveTo = null;
+      isHint = false;
     });
   }
 
@@ -306,21 +312,19 @@ class _PuzzleChessboardState extends State<PuzzleChessboard> {
                       if (isPuzzleSolved) {
                         Navigator.pop(context, true);
                       } else {
-                        showDialog(
-                          context: context,
-                          builder: (context) => AlertDialog(
-                            title: const Text('Gợi ý'),
-                            content: Text(
-                              'Nước đi đúng là: ${solutionMoves[currentMoveIndex]}',
-                            ),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.pop(context),
-                                child: const Text('Đóng'),
-                              ),
-                            ],
-                          ),
-                        );
+                        // Highlight the solution move squares
+                        setState(() {
+                          validSquares = {};
+                          if (!isHint) {
+                            lastHintMoveFrom =
+                                solutionMoves[currentMoveIndex].substring(0, 2);
+                            isHint = true;
+                          } else if (isHint) {
+                            lastHintMoveTo =
+                                solutionMoves[currentMoveIndex].substring(2, 4);
+                            isHint = false;
+                          }
+                        });
                       }
                     },
                     style: ElevatedButton.styleFrom(
@@ -422,6 +426,8 @@ class _PuzzleChessboardState extends State<PuzzleChessboard> {
     bool isValidSquare = validSquares.contains(coor);
     bool isLastMoveFrom = coor == lastMoveFrom;
     bool isLastMoveTo = coor == lastMoveTo;
+    bool isLastHintMoveFrom = coor == lastHintMoveFrom;
+    bool isLastHintMoveTo = coor == lastHintMoveTo;
     String? piece = board[row][col];
 
     return DragTarget<String>(
@@ -438,10 +444,19 @@ class _PuzzleChessboardState extends State<PuzzleChessboard> {
               border: Border.all(
                 color: isValidSquare
                     ? Colors.green
-                    : isLastMoveFrom || isLastMoveTo
+                    : isLastMoveFrom ||
+                            isLastMoveTo ||
+                            isLastHintMoveFrom ||
+                            isLastHintMoveTo
                         ? Colors.blueAccent
                         : Colors.transparent,
-                width: isValidSquare || isLastMoveFrom || isLastMoveTo ? 2 : 0,
+                width: isValidSquare ||
+                        isLastMoveFrom ||
+                        isLastMoveTo ||
+                        isLastHintMoveFrom ||
+                        isLastHintMoveTo
+                    ? 2
+                    : 0,
               ),
               boxShadow: isLastMoveTo
                   ? [

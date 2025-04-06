@@ -154,7 +154,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                               border: Border.all(color: Colors.white, width: 2),
                               image: _user!.picture.isNotEmpty
                                   ? DecorationImage(
-                                      image: NetworkImage(_user!.picture),
+                                      image: NetworkImage(
+                                          "${_user!.picture}/large"),
                                       fit: BoxFit.cover,
                                     )
                                   : const DecorationImage(

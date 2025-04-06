@@ -92,10 +92,14 @@ class MatchMakingSerice {
     channel.sink.add(jsonEncode({"action": "queueing"}));
 
     Completer<MatchModel?> completer = Completer();
+    String? lastMessage;
 
     channel.stream.listen(
       (message) async {
         try {
+          // Lưu tin nhắn cuối cùng nhận được
+          lastMessage = message;
+
           final data = jsonDecode(message);
           print("Received WebSocket data: $data");
           print("isMatch: ${data.containsKey("matchId")}");
@@ -123,8 +127,22 @@ class MatchMakingSerice {
           completer.completeError(error);
         }
       },
-      onDone: () {
+      onDone: () async {
         print("WebSocket connection closed");
+        // Nếu có tin nhắn cuối cùng và đó chứa thông tin về trận đấu
+        if (lastMessage != null && !completer.isCompleted) {
+          try {
+            // Kiểm tra xem tin nhắn cuối cùng có phải là thông tin trận đấu không
+            final data = jsonDecode(lastMessage!);
+            if (data.containsKey("matchId")) {
+              MatchModel matchData = await handleQueued(lastMessage!);
+              completer.complete(matchData);
+              return;
+            }
+          } catch (e) {
+            print("Error processing last message: $e");
+          }
+        }
         if (!completer.isCompleted) {
           completer.complete(null);
         }

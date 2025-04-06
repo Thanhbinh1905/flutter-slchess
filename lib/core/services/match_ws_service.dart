@@ -57,9 +57,12 @@ class MatchWebsocketService {
       },
       onError: (error) {
         print('Stream encountered an error: $error');
+        _showConnectionErrorDialog(context, "Lỗi kết nối: $error");
       },
       onDone: () {
         print('Luồng đã bị đóng.');
+        // Hiển thị thông báo và điều hướng về home khi luồng bị đóng
+        _showConnectionClosedDialog(context);
       },
     );
   }
@@ -91,6 +94,60 @@ class MatchWebsocketService {
         );
       },
     );
+  }
+
+  void _showConnectionClosedDialog(BuildContext context) {
+    // Đảm bảo hiển thị dialog trên main thread
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!context.mounted) return;
+
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            title: const Text('Kết nối bị ngắt'),
+            content: const Text(
+                'Kết nối đến máy chủ đã bị đóng. Trận đấu không thể tiếp tục.'),
+            actions: <Widget>[
+              TextButton(
+                child: const Text('Quay về trang chủ'),
+                onPressed: () {
+                  Navigator.of(context).popUntil((route) => route.isFirst);
+                  Navigator.of(context).pushReplacementNamed('/home');
+                },
+              ),
+            ],
+          );
+        },
+      );
+    });
+  }
+
+  void _showConnectionErrorDialog(BuildContext context, String errorMessage) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!context.mounted) return;
+
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            title: const Text('Lỗi kết nối'),
+            content: Text(errorMessage),
+            actions: <Widget>[
+              TextButton(
+                child: const Text('Quay về trang chủ'),
+                onPressed: () {
+                  Navigator.of(context).popUntil((route) => route.isFirst);
+                  Navigator.of(context).pushReplacementNamed('/home');
+                },
+              ),
+            ],
+          );
+        },
+      );
+    });
   }
 
   void _sendGameData(Map<String, Object> data) {
