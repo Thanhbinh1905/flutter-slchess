@@ -11,6 +11,7 @@ import './user_service.dart';
 import './puzzle_service.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import '../screens/auth_webview_screen.dart';
 
 class AmplifyAuthService {
   static final AmplifyAuthService _instance = AmplifyAuthService._internal();
@@ -324,15 +325,23 @@ class AmplifyAuthService {
   // Thực hiện đăng nhập với giao diện Amplify
   Future<void> signIn(BuildContext context) async {
     try {
-      await Amplify.Auth.signInWithWebUI();
-      navigateToHome();
+      // Hiển thị WebView và đợi kết quả
+      final result = await Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => const AuthWebViewScreen()),
+      );
+
+      // Nếu có callback URL
+      if (result != null && result is String) {
+        // Xử lý callback URL và hoàn tất đăng nhập
+        await Amplify.Auth.signInWithWebUI(
+          options: const SignInWithWebUIOptions(),
+        );
+        await _fetchAndSaveUserInfo();
+        navigateToHome();
+      }
     } catch (e) {
       String errorMessage = 'Lỗi đăng nhập';
-
-      if (e.toString().contains('No browser available')) {
-        errorMessage =
-            'Không tìm thấy trình duyệt. Vui lòng cài đặt trình duyệt web (Chrome, Firefox,...) và thử lại.';
-      }
 
       if (context.mounted) {
         showDialog(
