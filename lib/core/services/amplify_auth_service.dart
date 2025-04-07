@@ -324,98 +324,34 @@ class AmplifyAuthService {
   // Thực hiện đăng nhập với giao diện Amplify
   Future<void> signIn(BuildContext context) async {
     try {
-      // Kiểm tra xem Amplify đã được khởi tạo chưa
-      if (!_isInitialized) {
-        try {
-          await initializeAmplify();
-        } catch (e) {
-          // Nếu không thể khởi tạo Amplify, hiển thị lỗi và quay lại
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Lỗi khởi tạo: $e')),
-          );
-          return;
-        }
-      }
-
-      // Kiểm tra xem Auth plugin đã được thêm chưa
-      try {
-        // Thử một API đơn giản để xem Auth plugin có hoạt động không
-        await Amplify.Auth.getCurrentUser();
-      } catch (e) {
-        // Nếu lỗi là "Auth plugin has not been added"
-        if (e.toString().contains('Auth plugin has not been added')) {
-          // Thử khởi tạo lại
-          try {
-            _isInitialized = false; // Reset trạng thái
-            await initializeAmplify();
-
-            // Kiểm tra lại sau khi khởi tạo
-            try {
-              await Amplify.Auth.getCurrentUser();
-            } catch (e2) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                    content: Text(
-                        'Không thể kết nối tới Auth service. Vui lòng khởi động lại ứng dụng.')),
-              );
-              return;
-            }
-          } catch (e2) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Lỗi khởi tạo lại Amplify: $e2')),
-            );
-            return;
-          }
-        }
-      }
-
-      // Hiển thị thông báo đang đăng nhập
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Đang mở trang đăng nhập...')),
-      );
-
-      try {
-        // Thực hiện đăng nhập
-        final result = await Amplify.Auth.signInWithWebUI(
-          provider: AuthProvider.cognito,
-        );
-
-        if (result.isSignedIn) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Đăng nhập thành công!')),
-          );
-          await _fetchAndSaveUserInfo();
-          navigateToHome();
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Đăng nhập không thành công')),
-          );
-        }
-      } catch (e) {
-        if (e.toString().contains('no browser available')) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                  'Không tìm thấy trình duyệt web. Vui lòng cài đặt trình duyệt web và thử lại.'),
-            ),
-          );
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Lỗi đăng nhập: $e')),
-          );
-        }
-        return;
-      }
-    } on AmplifyException catch (e) {
-      safePrint('Lỗi đăng nhập: ${e.message}');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Lỗi: ${e.message}')),
-      );
+      await Amplify.Auth.signInWithWebUI();
+      navigateToHome();
     } catch (e) {
+      String errorMessage = 'Lỗi đăng nhập';
+
+      if (e.toString().contains('No browser available')) {
+        errorMessage =
+            'Không tìm thấy trình duyệt. Vui lòng cài đặt trình duyệt web (Chrome, Firefox,...) và thử lại.';
+      }
+
+      if (context.mounted) {
+        showDialog(
+          context: context,
+          builder: (BuildContext context) {
+            return AlertDialog(
+              title: const Text('Lỗi'),
+              content: Text(errorMessage),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Đóng'),
+                ),
+              ],
+            );
+          },
+        );
+      }
       safePrint('Lỗi đăng nhập: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Lỗi: $e')),
-      );
     }
   }
 
