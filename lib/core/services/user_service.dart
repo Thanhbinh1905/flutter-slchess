@@ -16,21 +16,24 @@ class UserService {
   Future<UserModel> getUserInfo(String userId, String idToken,
       {Function? onAuthError}) async {
     try {
+      final url = "$getUserApiUrl?id=$userId";
+      print("Gọi API getUserInfo với URL: $url");
+
       final response = await http.get(
-        Uri.parse("$getUserApiUrl/$userId"),
+        Uri.parse(url),
         headers: {'Authorization': 'Bearer $idToken'},
       );
+
+      print("Response status: ${response.statusCode}");
+      print("Response body: ${response.body}");
+
       if (response.statusCode == 200) {
         return UserModel.fromJson(jsonDecode(response.body));
       } else if (response.statusCode == 401) {
-        // Token hết hạn hoặc không hợp lệ
         print("Token hết hạn hoặc không hợp lệ (401) trong getUserInfo");
-
-        // Gọi callback để xử lý lỗi xác thực (ví dụ: đăng xuất hoặc refresh token)
         if (onAuthError != null) {
           onAuthError();
         }
-
         throw Exception(
             'Token hết hạn hoặc không hợp lệ: ${response.statusCode}');
       } else {
@@ -39,7 +42,7 @@ class UserService {
       }
     } catch (e) {
       print("Error when getting user info: $e");
-      throw Exception('Error when getting user info');
+      throw Exception('Error when getting user info: $e');
     }
   }
 
@@ -87,10 +90,10 @@ class UserService {
         await Hive.openBox<UserModel>(USER_BOX);
       }
 
-      // Sử dụng accessToken thay vì idToken
-      final String processedAccessToken = _processToken(accessToken);
+      // Sử dụng dToken
+      final String processedIdToken = _processToken(idToken);
 
-      if (processedAccessToken.isEmpty) {
+      if (processedIdToken.isEmpty) {
         print("Processed token rỗng, không thể lấy thông tin người dùng");
 
         if (onAuthError != null) {
@@ -100,22 +103,14 @@ class UserService {
         throw Exception('Processed token rỗng');
       }
 
-      print(
-          "Access Token (processed): ${processedAccessToken.substring(0, math.min(20, processedAccessToken.length))}..."); // Debug
-
       final response = await http.get(
-        Uri.parse(getSelfUserApiUrl),
-        headers: {'Authorization': 'Bearer $processedAccessToken'},
+        Uri.parse(getUserApiUrl),
+        headers: {'Authorization': 'Bearer $processedIdToken'},
       );
 
-      print(
-          "Self info response: ${response.statusCode}, body: ${response.body}");
-
       if (response.statusCode == 200) {
-        String userId = jsonDecode(response.body)['sub'];
-        UserModel user =
-            await getUserInfo(userId, idToken, onAuthError: onAuthError);
-        print("User data: ${user.toJson()}");
+        UserModel user = UserModel.fromJson(jsonDecode(response.body));
+
         await savePlayer(user);
       } else if (response.statusCode == 401) {
         // Token hết hạn hoặc không hợp lệ

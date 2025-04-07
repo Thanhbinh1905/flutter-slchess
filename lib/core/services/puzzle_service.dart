@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 import 'package:hive/hive.dart';
 import '../constants/constants.dart';
 import '../models/puzzle_model.dart';
-import '../services/userService.dart';
+import '../services/user_service.dart';
 import 'dart:convert';
 
 class PuzzleService {

@@ -39,7 +39,6 @@ class AmplifyConfig {
                   "WebDomain": "$cognitoUrl",
                   "AppClientId": "$cognitoClientId",
                   "SignInRedirectURI": "slchess://callback/",
-                  "SignOutRedirectURI": "slchess://signout/",
                   "Scopes": ["email", "openid", "phone", "aws.cognito.signin.user.admin"]
                 }
               }

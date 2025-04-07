@@ -1,5 +1,5 @@
 import './user.dart';
-import '../services/userService.dart';
+import '../services/user_service.dart';
 import '../services/amplify_auth_service.dart';
 
 class Player {

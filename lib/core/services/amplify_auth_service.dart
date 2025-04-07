@@ -7,7 +7,7 @@ import 'package:amplify_auth_cognito/amplify_auth_cognito.dart';
 import 'package:flutter_slchess/core/config/amplifyconfiguration.dart'
     as app_config;
 import 'package:flutter_slchess/main.dart';
-import './userService.dart';
+import './user_service.dart';
 import './puzzle_service.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';

@@ -1,5 +1,7 @@
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+
 class ApiConstants {
-  static const String identifier = "5m1o9s40ui";
+  static String identifier = dotenv.env['API_IDENTIFIER'] ?? 'default-api';
   static String get matchMaking =>
       "https://$identifier.execute-api.ap-southeast-2.amazonaws.com/dev/matchmaking";
 
@@ -17,10 +19,12 @@ class ApiConstants {
 }
 
 class WebsocketConstants {
+  static String wsIdentifier =
+      dotenv.env['WEBSOCKET_IDENTIFIER'] ?? 'default-ws';
   static const String serverEndpoint = "localhost:7202";
 
   static String get queueing =>
-      "wss://93lhu5pndi.execute-api.ap-southeast-2.amazonaws.com/dev";
+      "wss://$wsIdentifier.execute-api.ap-southeast-2.amazonaws.com/dev";
   static String get game => "ws://$serverEndpoint/game/";
 }
 

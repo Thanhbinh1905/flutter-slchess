@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_slchess/core/models/user.dart';
 import 'package:flutter_slchess/core/services/amplify_auth_service.dart';
-import 'package:flutter_slchess/core/services/userService.dart';
+import 'package:flutter_slchess/core/services/user_service.dart';
 import 'dart:io';
 
 class UserProfileScreen extends StatefulWidget {

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/matchmaking_service.dart';
-import '../services/userService.dart';
+import '../services/user_service.dart';
 import '../models/user.dart';
 import '../models/chessboard_model.dart';
 import '../models/match_model.dart';
