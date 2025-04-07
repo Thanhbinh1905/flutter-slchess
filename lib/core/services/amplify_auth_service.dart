@@ -374,21 +374,37 @@ class AmplifyAuthService {
         const SnackBar(content: Text('Đang mở trang đăng nhập...')),
       );
 
-      // Thực hiện đăng nhập
-      final result = await Amplify.Auth.signInWithWebUI(
-        provider: AuthProvider.cognito,
-      );
+      try {
+        // Thực hiện đăng nhập
+        final result = await Amplify.Auth.signInWithWebUI(
+          provider: AuthProvider.cognito,
+        );
 
-      if (result.isSignedIn) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Đăng nhập thành công!')),
-        );
-        await _fetchAndSaveUserInfo();
-        navigateToHome();
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Đăng nhập không thành công')),
-        );
+        if (result.isSignedIn) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Đăng nhập thành công!')),
+          );
+          await _fetchAndSaveUserInfo();
+          navigateToHome();
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Đăng nhập không thành công')),
+          );
+        }
+      } catch (e) {
+        if (e.toString().contains('no browser available')) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                  'Không tìm thấy trình duyệt web. Vui lòng cài đặt trình duyệt web và thử lại.'),
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Lỗi đăng nhập: $e')),
+          );
+        }
+        return;
       }
     } on AmplifyException catch (e) {
       safePrint('Lỗi đăng nhập: ${e.message}');
