@@ -13,7 +13,7 @@ import '../models/match_model.dart';
 
 class MatchMakingSerice {
   static final String _localWsGameUrl = WebsocketConstants.game;
-  static final String _wsQueueUrl = WebsocketConstants.queueing;
+  static final String _wsQueueUrl = WebsocketConstants.wsUrl;
   static final String _matchMakingApiUrl = ApiConstants.matchMaking;
 
   static WebSocketChannel startGame(

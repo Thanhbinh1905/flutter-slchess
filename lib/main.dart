@@ -4,6 +4,7 @@ import 'package:flutter_slchess/core/models/chessboard_model.dart';
 import 'package:flutter_slchess/core/services/amplify_auth_service.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:flutter_slchess/core/models/puzzle_model.dart';
+import 'package:flutter_slchess/core/models/moveset_model.dart';
 import 'package:amplify_flutter/amplify_flutter.dart';
 import 'core/screens/login_screen.dart';
 import 'core/screens/homescreen.dart';
@@ -27,6 +28,8 @@ Future<void> main() async {
   Hive.registerAdapter(PuzzleProfileAdapter());
   Hive.registerAdapter(UserModelAdapter());
   Hive.registerAdapter(MembershipAdapter());
+  Hive.registerAdapter(MoveSetAdapter());
+  Hive.registerAdapter(MoveItemAdapter());
 
   // Khởi tạo AmplifyAuthService instance để đảm bảo singleton được tạo sớm
   final authService = AmplifyAuthService();

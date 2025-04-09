@@ -4,12 +4,10 @@ import 'package:http/http.dart' as http;
 import '../constants/constants.dart';
 import 'package:hive/hive.dart';
 import 'package:hive_flutter/hive_flutter.dart';
-import 'dart:math' as math;
 
 class UserService {
   static String getUserApiUrl = ApiConstants.getUserInfo;
-  static String getSelfUserApiUrl = ApiConstants.getSelfUserInfoUrl;
-  static String updateRatingUrl = ApiConstants.getSelfUserInfoUrl;
+  static String updateRatingUrl = ApiConstants.getUserInfo;
 
   static const String USER_BOX = 'userBox';
 

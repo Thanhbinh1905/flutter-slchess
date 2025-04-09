@@ -3,8 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:chess/chess.dart' as chess;
 import 'package:flutter_slchess/core/models/match_model.dart';
 import 'package:flutter_slchess/core/models/gamestate_model.dart';
+import 'package:flutter_slchess/core/models/moveset_model.dart';
 import 'package:flutter_slchess/core/services/match_ws_service.dart';
 import 'package:flutter_slchess/core/services/amplify_auth_service.dart';
+import 'package:flutter_slchess/core/services/moveset_service.dart';
 
 import 'dart:async';
 import 'dart:math' as math;
@@ -29,7 +31,9 @@ class Chessboard extends StatefulWidget {
 class _ChessboardState extends State<Chessboard> {
   // Game state
   chess.Chess game = chess.Chess();
-  List<String> listFen = [];
+  // List<String> listFen = [];
+  MoveSet? moveSet;
+
   int halfmove = 0;
   late List<List<String?>> board;
   late String fen;
@@ -62,7 +66,10 @@ class _ChessboardState extends State<Chessboard> {
   // Websocket and services
   late MatchWebsocketService matchService;
   late MatchModel matchModel;
+  late MoveSetService moveSetService;
   final AmplifyAuthService _amplifyAuthService = AmplifyAuthService();
+
+  String? storedIdToken;
 
   @override
   void initState() {
@@ -80,11 +87,57 @@ class _ChessboardState extends State<Chessboard> {
     _startClock();
   }
 
-  void _initializeGameState() {
+  Future<void> _initializeGameState() async {
     matchModel = widget.matchModel;
     isWhite = widget.isWhite;
     isOnline = widget.isOnline;
     server = matchModel.server;
+
+    storedIdToken = await _amplifyAuthService.getIdToken();
+
+    moveSetService = MoveSetService();
+    await moveSetService.init();
+
+    if (storedIdToken != null) {
+      moveSet = await moveSetService.getGameMoves(
+          widget.matchModel.matchId, storedIdToken!, isOnline);
+
+      print("moveSet: ${moveSet!.toJson()}");
+
+      // Nếu moveset đã có nước đi, cập nhật game state đến trạng thái hiện tại
+      if (moveSet != null && moveSet!.moves.isNotEmpty) {
+        // Load từng nước đi vào game để cập nhật lịch sử
+        for (var moveItem in moveSet!.moves) {
+          String move = moveItem.move;
+          if (move.length >= 4) {
+            String from = move.substring(0, 2);
+            String to = move.substring(2, 4);
+            String promotion = move.length > 4 ? move[4] : '';
+
+            game.move({
+              'from': from,
+              'to': to,
+              'promotion': promotion.isEmpty ? null : promotion,
+            });
+          }
+        }
+
+        // Load FEN cuối cùng vào game
+        fen = moveSet!.moves.last.fen;
+        game.load(fen);
+        board = parseFEN(fen);
+
+        // Cập nhật lastMove
+        lastMoveFrom = moveSet!.moves.last.move.substring(0, 2);
+        lastMoveTo = moveSet!.moves.last.move.substring(2, 4);
+
+        // Cập nhật halfmove
+        halfmove = moveSet!.moves.length - 1;
+
+        // Cập nhật lượt đi
+        isWhiteTurn = game.turn.name == "WHITE";
+      }
+    }
   }
 
   void _initializeTimeControl() {
@@ -134,17 +187,13 @@ class _ChessboardState extends State<Chessboard> {
   }
 
   Future<void> _initializeOfflineGame() async {
-    const fen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
-    listFen.add(fen);
-    game.load(fen);
-    board = parseFEN(listFen.last);
+    board = parseFEN(game.fen);
   }
 
   Future<void> _initializeOnlineGame() async {
     board =
         parseFEN('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1');
-
-    String? storedIdToken = await _amplifyAuthService.getIdToken();
+    storedIdToken = await _amplifyAuthService.getIdToken();
     matchService = MatchWebsocketService.startGame(
         matchModel.matchId, storedIdToken!, server);
 
@@ -158,22 +207,50 @@ class _ChessboardState extends State<Chessboard> {
 
   void _handleGameStateUpdate(GameState gameState) {
     setState(() {
-      fen = gameState.fen;
-      listFen.add(fen);
-      board = parseFEN(fen);
-      game.load(fen);
+      if (moveSet != null) {
+        fen = gameState.fen;
+
+        // Kiểm tra xem nước đi này đã tồn tại chưa
+        if ((moveSet!.moves.isEmpty || moveSet!.moves.last.fen != fen) &&
+            fen != MoveSetService.initFen) {
+          // Lấy nước đi từ FEN trước đó
+          String lastFen = moveSet!.moves.isEmpty
+              ? MoveSetService.initFen
+              : moveSet!.moves.last.fen;
+          chess.Move move = moveSetService.getMoveFromFenDiff(lastFen, fen);
+          String moveString = move.fromAlgebraic + move.toAlgebraic;
+
+          // Kiểm tra xem nước đi này đã tồn tại trong moveset chưa
+          bool moveExists =
+              moveSet!.moves.any((m) => m.move == moveString && m.fen == fen);
+
+          if (!moveExists) {
+            bool success = game.move(move);
+            if (success) {
+              board = parseFEN(game.fen);
+              // Thêm nước đi mới vào moveset
+              moveSet!.moves.add(MoveItem(move: moveString, fen: fen));
+              moveSetService.addMove(matchModel.matchId, fen, moveString);
+
+              // Cập nhật lastMove
+              if (moveString.length >= 4) {
+                lastMoveFrom = moveString.substring(0, 2);
+                lastMoveTo = moveString.substring(2, 4);
+              }
+            } else {
+              print("move failed: $move");
+            }
+          }
+        }
+
+        // Cập nhật halfmove
+        halfmove = (moveSet?.moves.length ?? 1) - 1;
+      }
+
+      // Cập nhật thời gian và lượt đi
       whiteTime = gameState.clocks[0];
       blackTime = gameState.clocks[1];
       isWhiteTurn = game.turn.name == "WHITE";
-
-      // Kiểm tra xem có nước đi mới từ server không
-      if (gameState.lastMove != null) {
-        // Nước đi có dạng "e2e4"
-        if (gameState.lastMove!.length >= 4) {
-          lastMoveFrom = gameState.lastMove!.substring(0, 2);
-          lastMoveTo = gameState.lastMove!.substring(2, 4);
-        }
-      }
     });
   }
 
@@ -365,7 +442,7 @@ class _ChessboardState extends State<Chessboard> {
                 icon: Icons.arrow_forward_ios,
               ),
             ),
-          ]
+          ],
         ],
       ),
     );
@@ -383,12 +460,15 @@ class _ChessboardState extends State<Chessboard> {
   }
 
   void _moveBackward() {
-    if (listFen.length > 1) {
+    if (moveSet != null && moveSet!.moves.length > 1) {
       setState(() {
         if (halfmove > 0) {
           halfmove--;
         }
-        fen = listFen[halfmove];
+
+        fen = moveSet!.moves[halfmove].fen;
+        lastMoveFrom = moveSet!.moves[halfmove].move.substring(0, 2);
+        lastMoveTo = moveSet!.moves[halfmove].move.substring(2, 4);
         board = parseFEN(fen);
         scrollToIndex(halfmove);
       });
@@ -396,12 +476,14 @@ class _ChessboardState extends State<Chessboard> {
   }
 
   void _moveForward() {
-    if (listFen.length > 1) {
+    if (moveSet != null && moveSet!.moves.length > 1) {
       setState(() {
-        if (halfmove < listFen.length - 1) {
+        if (halfmove < moveSet!.moves.length - 1) {
           halfmove++;
         }
-        fen = listFen[halfmove];
+        fen = moveSet!.moves[halfmove].fen;
+        lastMoveFrom = moveSet!.moves[halfmove].move.substring(0, 2);
+        lastMoveTo = moveSet!.moves[halfmove].move.substring(2, 4);
         board = parseFEN(fen);
         scrollToIndex(halfmove);
       });
@@ -584,6 +666,10 @@ class _ChessboardState extends State<Chessboard> {
       return;
     }
 
+    // if (halfmove != moveSet!.moves.length - 1 || !isOnline) {
+    //   return;
+    // }
+
     setState(() {
       if (selectedSquare == null || !validSquares.contains(coor)) {
         // Chọn quân cờ
@@ -668,12 +754,17 @@ class _ChessboardState extends State<Chessboard> {
         game.move({
           'from': move.fromAlgebraic,
           'to': move.toAlgebraic,
-          'promotion': promotionPiece.toLowerCase(), // 'q', 'n', 'b', 'r'
+          'promotion': promotionPiece.toLowerCase(),
         });
 
         setState(() {
           fen = game.fen;
-          listFen.add(fen);
+          if (moveSet != null) {
+            moveSet!.moves.add(MoveItem(
+                move: move.fromAlgebraic + move.toAlgebraic, fen: fen));
+
+            moveSetService.addMove(widget.matchModel.matchId, fen, moveString);
+          }
           board = parseFEN(fen);
 
           // Lưu thông tin nước đi gần nhất
@@ -688,7 +779,7 @@ class _ChessboardState extends State<Chessboard> {
           }
 
           _scrollToBottomAfterBuild();
-          halfmove = listFen.length - 1;
+          halfmove = (moveSet?.moves.length ?? 1) - 1;
 
           // Gửi nước đi đến server nếu đang chơi online
           if (isOnline) {
@@ -727,7 +818,12 @@ class _ChessboardState extends State<Chessboard> {
     bool success = game.move(move);
     if (success) {
       fen = game.fen;
-      listFen.add(fen);
+      if (moveSet != null) {
+        moveSet!.moves.add(
+            MoveItem(move: move.fromAlgebraic + move.toAlgebraic, fen: fen));
+        moveSetService.addMove(widget.matchModel.matchId, fen,
+            move.fromAlgebraic + move.toAlgebraic);
+      }
       board = parseFEN(fen);
 
       // Lưu thông tin nước đi gần nhất
@@ -742,7 +838,7 @@ class _ChessboardState extends State<Chessboard> {
       }
 
       _scrollToBottomAfterBuild();
-      halfmove = listFen.length - 1;
+      halfmove = (moveSet?.moves.length ?? 1) - 1;
 
       String sanMove = move.fromAlgebraic + move.toAlgebraic;
       // Thêm thông tin phong cấp nếu có
@@ -792,6 +888,12 @@ class _ChessboardState extends State<Chessboard> {
 
         showGameEndDialog(context, "Draw", resultStr);
       }
+
+      // Xóa cache moveset khi kết thúc ván đấu
+      if (moveSet != null) {
+        moveSetService.deleteGame(matchModel.matchId);
+        moveSet = null;
+      }
     }
   }
 
@@ -827,93 +929,102 @@ class _ChessboardState extends State<Chessboard> {
   }
 
   Widget gameHistory(chess.Chess game) {
-    List<dynamic> moves = game.getHistory();
-
+    var moves = game.getHistory();
     if (moves.isEmpty) {
-      return Container(
-        alignment: Alignment.centerLeft,
-        padding: const EdgeInsets.symmetric(horizontal: 10),
-        child: const Text(" ", style: TextStyle(color: Colors.white)),
-      );
+      return const SizedBox.shrink();
     }
-
-    List<Widget> formattedMoves = List.generate(
-      (moves.length / 2).floor(),
-      (index) {
-        String moveNumber = "${index + 1}.";
-        String firstMove = moves[index * 2];
-        String? secondMove =
-            index * 2 + 1 < moves.length ? moves[index * 2 + 1] : null;
-
-        return Row(
-          children: [
-            GestureDetector(
-              onTap: () => onMoveSelected(index * 2),
-              child: Row(children: [
-                Text(
-                  moveNumber,
-                  style: const TextStyle(color: Colors.white),
-                ),
-                moveSelect(index * 2 + 1, firstMove),
-              ]),
-            ),
-            if (secondMove != null)
-              GestureDetector(
-                onTap: () => onMoveSelected(index * 2 + 1),
-                child: moveSelect(index * 2 + 2, secondMove),
-              ),
-            const SizedBox(width: 4),
-          ],
-        );
-      },
-    );
-
-    if (moves.length % 2 != 0) {
-      formattedMoves.add(GestureDetector(
-        onTap: () => onMoveSelected(moves.length - 1),
-        child: Row(
-          children: [
-            Text("${(moves.length / 2).ceil()}. ",
-                style: const TextStyle(color: Colors.white)),
-            moveSelect(moves.length, moves.last)
-          ],
-        ),
-      ));
-    }
-
-    return Container(
-      child: SingleChildScrollView(
+    return ConstrainedBox(
+      constraints: const BoxConstraints(
+        maxHeight: 22, // giới hạn cao nhất thôi
+      ),
+      child: ListView.builder(
         scrollDirection: Axis.horizontal,
         controller: _scrollController,
-        child: Row(children: formattedMoves),
-      ),
-    );
-  }
-
-  Widget moveSelect(int index, String text) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 4),
-      decoration: BoxDecoration(
-        borderRadius: const BorderRadius.only(
-          topLeft: Radius.circular(6),
-          topRight: Radius.circular(6),
-          bottomLeft: Radius.circular(2),
-          bottomRight: Radius.circular(2),
-        ),
-        color: halfmove == index ? const Color(0xFF666666) : null,
-      ),
-      child: Text(
-        text,
-        style: TextStyle(
-          color: halfmove == index ? Colors.white : Colors.grey[400],
-          fontWeight: halfmove == index ? FontWeight.bold : FontWeight.normal,
-        ),
+        itemCount: moves.length,
+        itemBuilder: (context, index) {
+          final move = moves[index];
+          return Container(
+            margin: const EdgeInsets.only(left: 8),
+            child: InkWell(
+                onTap: () {
+                  setState(() {
+                    halfmove = index;
+                    // Sử dụng moveSet để cập nhật game state
+                    if (moveSet != null && moveSet!.moves.length > index) {
+                      fen = moveSet!.moves[halfmove].fen;
+                      lastMoveFrom =
+                          moveSet!.moves[halfmove].move.substring(0, 2);
+                      lastMoveTo =
+                          moveSet!.moves[halfmove].move.substring(2, 4);
+                      board = parseFEN(fen);
+                      // Cập nhật game state
+                      game.load(fen);
+                    }
+                  });
+                },
+                child: index % 2 == 0
+                    ? Row(
+                        children: [
+                          Text(
+                            "${(index / 2 + 1).toInt()}. ",
+                            style: const TextStyle(color: Colors.white),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6),
+                            decoration: index == halfmove
+                                ? const BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.only(
+                                      topLeft: Radius.circular(8),
+                                      topRight: Radius.circular(8),
+                                      bottomLeft: Radius.circular(2),
+                                      bottomRight: Radius.circular(2),
+                                    ),
+                                  )
+                                : const BoxDecoration(),
+                            child: Text(
+                              move.toString(),
+                              style: TextStyle(
+                                  color: index == halfmove
+                                      ? Colors.black
+                                      : Colors.white),
+                            ),
+                          ),
+                        ],
+                      )
+                    : Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6),
+                            decoration: index == halfmove
+                                ? const BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.only(
+                                      topLeft: Radius.circular(8),
+                                      topRight: Radius.circular(8),
+                                      bottomLeft: Radius.circular(2),
+                                      bottomRight: Radius.circular(2),
+                                    ),
+                                  )
+                                : const BoxDecoration(),
+                            child: Text(
+                              move.toString(),
+                              style: TextStyle(
+                                  color: index == halfmove
+                                      ? Colors.black
+                                      : Colors.white),
+                            ),
+                          ),
+                        ],
+                      )),
+          );
+        },
       ),
     );
   }
 
   void scrollToIndex(int index) {
-    if (index >= 0 && index < listFen.length) {
+    if (index >= 0 && index < (moveSet?.moves.length ?? 0)) {
       double position = index * 50.0;
       _scrollController.animateTo(
         position,
@@ -979,16 +1090,6 @@ class _ChessboardState extends State<Chessboard> {
     const columns = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
     row = 8 - row;
     return columns[col] + row.toString();
-  }
-
-  void onMoveSelected(int index) {
-    if (index < 0 || index >= listFen.length - 1) return;
-
-    setState(() {
-      fen = listFen[index + 1];
-      board = parseFEN(fen);
-      halfmove = index + 1;
-    });
   }
 
   Widget _bottomAppBarBtn(String text, VoidCallback onPressed,
