@@ -128,14 +128,21 @@ class _PuzzleChessboardState extends State<PuzzleChessboard> {
     if (validMove != null) {
       String moveAlgebraic = validMove.fromAlgebraic + validMove.toAlgebraic;
 
-      if (currentMoveIndex < solutionMoves.length &&
-          moveAlgebraic != solutionMoves[currentMoveIndex]) {
-        setState(() {
-          message = "Nước đi không chính xác!";
-          isPuzzleFailed = true;
-          isPlayerTurn = false;
-        });
-        return;
+      if (currentMoveIndex < solutionMoves.length) {
+        String expectedMove = solutionMoves[currentMoveIndex];
+        String expectedFrom = expectedMove.substring(0, 2);
+        String expectedTo = expectedMove.substring(2, 4);
+
+        // Kiểm tra ô bắt đầu và ô đích
+        if (validMove.fromAlgebraic != expectedFrom ||
+            validMove.toAlgebraic != expectedTo) {
+          setState(() {
+            message = "Nước đi không chính xác!";
+            isPuzzleFailed = true;
+            isPlayerTurn = false;
+          });
+          return;
+        }
       }
 
       // Kiểm tra xem đây có phải là nước đi phong cấp không
@@ -237,9 +244,7 @@ class _PuzzleChessboardState extends State<PuzzleChessboard> {
           return;
         }
 
-        // Thực hiện nước đi
-        game.move(moveString);
-
+        // Lưu lại trạng thái bàn cờ sau khi thực hiện nước đi
         setState(() {
           lastMoveFrom = move.fromAlgebraic;
           lastMoveTo = move.toAlgebraic;
@@ -291,9 +296,10 @@ class _PuzzleChessboardState extends State<PuzzleChessboard> {
 
   void _makeOpponentMove() {
     if (currentMoveIndex < solutionMoves.length) {
-      final move = solutionMoves[currentMoveIndex];
-      final from = move.substring(0, 2);
-      final to = move.substring(2, 4);
+      final moveString = solutionMoves[currentMoveIndex];
+      final from = moveString.substring(0, 2);
+      final to = moveString.substring(2, 4);
+      final promotion = moveString.length > 4 ? moveString.substring(4) : null;
 
       // Tìm nước đi hợp lệ
       chess.Move? validMove;
@@ -305,12 +311,30 @@ class _PuzzleChessboardState extends State<PuzzleChessboard> {
       }
 
       if (validMove != null) {
-        _makeMove(validMove);
+        // Nếu là nước đi phong cấp
+        if (promotion != null) {
+          game.move({
+            'from': from,
+            'to': to,
+            'promotion': promotion,
+          });
 
-        setState(() {
-          currentMoveIndex++;
-          isPlayerTurn = true;
-        });
+          setState(() {
+            lastMoveFrom = from;
+            lastMoveTo = to;
+            board = parseFEN(game.fen);
+            currentMoveIndex++;
+            isPlayerTurn = true;
+          });
+        } else {
+          // Nước đi thông thường
+          _makeMove(validMove);
+
+          setState(() {
+            currentMoveIndex++;
+            isPlayerTurn = true;
+          });
+        }
 
         if (currentMoveIndex >= solutionMoves.length) {
           _onPuzzleSolved();

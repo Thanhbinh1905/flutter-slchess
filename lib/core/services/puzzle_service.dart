@@ -242,4 +242,36 @@ class PuzzleService {
       print("Error clearing puzzle caches: $error");
     }
   }
+
+  Future<bool> canPlayPuzzle(String idToken) async {
+    try {
+      final userService = UserService();
+      final user = await userService.getPlayer();
+      if (user == null) {
+        throw Exception("Không tìm thấy thông tin người dùng");
+      }
+
+      final puzzleProfile = await getPuzzleRatingFromCacheOrAPI(idToken);
+      return puzzleProfile.canPlayPuzzle(user);
+    } catch (e) {
+      print("Lỗi khi kiểm tra quyền chơi puzzle: $e");
+      return false;
+    }
+  }
+
+  Future<void> incrementPuzzleCount(String idToken) async {
+    try {
+      final userService = UserService();
+      final user = await userService.getPlayer();
+      if (user == null) {
+        throw Exception("Không tìm thấy thông tin người dùng");
+      }
+
+      final puzzleProfile = await getPuzzleRatingFromCacheOrAPI(idToken);
+      puzzleProfile.incrementDailyCount();
+      await savePuzzleProfile(puzzleProfile);
+    } catch (e) {
+      print("Lỗi khi cập nhật số lần chơi puzzle: $e");
+    }
+  }
 }

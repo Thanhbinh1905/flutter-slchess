@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_slchess/core/models/user.dart';
 import 'package:flutter_slchess/core/services/amplify_auth_service.dart';
 import 'package:flutter_slchess/core/services/user_service.dart';
+import 'package:flutter_slchess/core/services/matchresult_service.dart';
+import 'package:flutter_slchess/core/models/matchresults_model.dart';
 import 'dart:io';
 
 class UserProfileScreen extends StatefulWidget {
@@ -13,8 +15,10 @@ class UserProfileScreen extends StatefulWidget {
 
 class _UserProfileScreenState extends State<UserProfileScreen> {
   final UserService _userService = UserService();
+  final MatchResultService _matchResultService = MatchResultService();
   final AmplifyAuthService _authService = AmplifyAuthService();
   UserModel? _user;
+  MatchResultsModel? _matchResults;
   bool _isLoading = true;
   File? _selectedImage;
 
@@ -60,6 +64,19 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           _user = user;
           _isLoading = false;
         });
+      }
+
+      // Load match history
+      if (_user != null) {
+        final String? idToken = await _authService.getIdToken();
+        if (idToken != null) {
+          final results =
+              await _matchResultService.getMatchResults(_user!.id, idToken);
+          if (!mounted) return;
+          setState(() {
+            _matchResults = results;
+          });
+        }
       }
     } catch (e) {
       print("Lỗi chi tiết khi tải thông tin người dùng: $e");
@@ -297,26 +314,10 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
               const SizedBox(height: 24),
 
-              // Các thành tích
-              _buildInfoSection('Thành tích'),
-              _buildAchievementItem(
-                'Cao thủ đấu nhanh',
-                'Hoàn thành 10 ván cờ nhanh',
-                Icons.speed,
-                true,
-              ),
-              _buildAchievementItem(
-                'Nhà chiến lược',
-                'Chiến thắng 5 ván liên tiếp',
-                Icons.military_tech,
-                false,
-              ),
-              _buildAchievementItem(
-                'Nhà vô địch',
-                'Đạt điểm đánh giá 2000',
-                Icons.emoji_events,
-                false,
-              ),
+              // Thêm phần lịch sử trận đấu
+              _buildMatchHistory(),
+
+              const SizedBox(height: 24),
             ],
           ),
         ),
@@ -425,6 +426,133 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           Icon(
             unlocked ? Icons.check_circle : Icons.lock,
             color: unlocked ? Colors.blue : Colors.grey,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMatchHistory() {
+    if (_matchResults == null || _matchResults!.items.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.black.withOpacity(0.3),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: const Center(
+          child: Text(
+            'Chưa có lịch sử trận đấu',
+            style: TextStyle(color: Colors.grey),
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildInfoSection('Lịch sử trận đấu gần đây'),
+        ..._matchResults!.items.take(5).map((match) => _buildMatchItem(match)),
+      ],
+    );
+  }
+
+  Widget _buildMatchItem(MatchResultItem match) {
+    final resultText = match.result == 1
+        ? 'Thắng'
+        : match.result == 0.5
+            ? 'Hòa'
+            : 'Thua';
+    final resultColor = match.result == 1
+        ? Colors.green
+        : match.result == 0.5
+            ? Colors.orange
+            : Colors.red;
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.4),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.withOpacity(0.2)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.2),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.3),
+                  blurRadius: 4,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: CircleAvatar(
+              radius: 24,
+              backgroundImage: match.opponentId.isNotEmpty
+                  ? NetworkImage(
+                      "https://slchess-dev-avatars.s3.ap-southeast-2.amazonaws.com/${match.opponentId}/small")
+                  : const AssetImage('assets/default_avt.jpg') as ImageProvider,
+              backgroundColor: Colors.grey[300],
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Rating: ${match.opponentRating.toInt()}',
+                  style: TextStyle(
+                    color: Colors.grey[400],
+                    fontSize: 14,
+                  ),
+                ),
+                Text(
+                  _formatDate(DateTime.parse(match.timestamp)),
+                  style: TextStyle(
+                    color: Colors.grey[400],
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: resultColor.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  resultText,
+                  style: TextStyle(
+                    color: resultColor,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 10,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          IconButton(
+            onPressed: () {},
+            icon: const Icon(Icons.analytics, color: Colors.blue),
           ),
         ],
       ),

@@ -19,17 +19,23 @@ class PuzzleProfileAdapter extends TypeAdapter<PuzzleProfile> {
     return PuzzleProfile(
       userId: fields[0] as String,
       rating: fields[1] as int,
+      dailyPuzzleCount: fields[2] as int,
+      lastPlayDate: fields[3] as DateTime?,
     );
   }
 
   @override
   void write(BinaryWriter writer, PuzzleProfile obj) {
     writer
-      ..writeByte(2)
+      ..writeByte(4)
       ..writeByte(0)
       ..write(obj.userId)
       ..writeByte(1)
-      ..write(obj.rating);
+      ..write(obj.rating)
+      ..writeByte(2)
+      ..write(obj.dailyPuzzleCount)
+      ..writeByte(3)
+      ..write(obj.lastPlayDate);
   }
 
   @override

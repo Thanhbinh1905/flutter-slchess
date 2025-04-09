@@ -1,4 +1,5 @@
 import 'package:hive/hive.dart';
+import 'user.dart';
 
 part 'puzzle_model.g.dart';
 
@@ -10,23 +11,67 @@ class PuzzleProfile {
   @HiveField(1)
   final int rating;
 
+  @HiveField(2)
+  int dailyPuzzleCount;
+
+  @HiveField(3)
+  DateTime lastPlayDate;
+
   PuzzleProfile({
     required this.userId,
     required this.rating,
-  });
+    this.dailyPuzzleCount = 0,
+    DateTime? lastPlayDate,
+  }) : lastPlayDate = lastPlayDate ?? DateTime.now();
 
   factory PuzzleProfile.fromJson(Map<String, dynamic> json) {
     return PuzzleProfile(
       userId: json['userId'],
       rating: json['rating'],
+      dailyPuzzleCount: json['dailyPuzzleCount'] ?? 0,
+      lastPlayDate:
+          DateTime.tryParse(json['lastPlayDate'] ?? '') ?? DateTime.now(),
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
-      'puzzleid': userId,
+      'userId': userId,
       'rating': rating,
+      'dailyPuzzleCount': dailyPuzzleCount,
+      'lastPlayDate': lastPlayDate.toIso8601String(),
     };
+  }
+
+  void resetDailyCount() {
+    final now = DateTime.now();
+    if (lastPlayDate.year != now.year ||
+        lastPlayDate.month != now.month ||
+        lastPlayDate.day != now.day) {
+      dailyPuzzleCount = 0;
+      lastPlayDate = now;
+    }
+  }
+
+  int getRemainingPuzzles(UserModel user) {
+    resetDailyCount();
+    if (user.membership == Membership.premium) {
+      return -1; // -1 nghĩa là không giới hạn
+    }
+    return 3 - dailyPuzzleCount;
+  }
+
+  bool canPlayPuzzle(UserModel user) {
+    resetDailyCount();
+    if (user.membership == Membership.premium) {
+      return true;
+    }
+    return dailyPuzzleCount < 3;
+  }
+
+  void incrementDailyCount() {
+    resetDailyCount();
+    dailyPuzzleCount++;
   }
 }
 

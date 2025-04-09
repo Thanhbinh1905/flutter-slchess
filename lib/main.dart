@@ -15,6 +15,8 @@ import 'core/screens/upload_image_screen.dart';
 import 'core/screens/user_profile_screen.dart';
 import 'core/screens/puzzle_chessboard.dart';
 import 'core/models/user.dart';
+import 'core/models/matchresults_model.dart';
+import 'core/services/matchresult_service.dart';
 
 final navigatorKey = GlobalKey<NavigatorState>();
 
@@ -30,8 +32,11 @@ Future<void> main() async {
   Hive.registerAdapter(MembershipAdapter());
   Hive.registerAdapter(MoveSetAdapter());
   Hive.registerAdapter(MoveItemAdapter());
+  Hive.registerAdapter(MatchResultsModelAdapter());
+  Hive.registerAdapter(MatchResultItemAdapter());
 
-  // Khởi tạo AmplifyAuthService instance để đảm bảo singleton được tạo sớm
+  // Khởi tạo các service
+  await MatchResultService.init();
   final authService = AmplifyAuthService();
 
   // Khởi tạo Amplify với xử lý lỗi toàn diện

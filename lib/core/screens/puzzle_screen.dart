@@ -260,12 +260,44 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
     );
   }
 
-  void _openRandomPuzzle() {
+  void _openRandomPuzzle() async {
     if (_puzzles != null && _puzzles!.isNotEmpty) {
-      // Get a random puzzle from the list
-      final random = DateTime.now().millisecondsSinceEpoch % _puzzles!.length;
-      final puzzle = _puzzles![random];
-      _openPuzzle(puzzle);
+      try {
+        final String? idToken = await _amplifyAuthService.getIdToken();
+        if (idToken == null) {
+          throw Exception("Vui lòng đăng nhập lại");
+        }
+
+        // Kiểm tra quyền chơi puzzle
+        final canPlay = await _puzzleService.canPlayPuzzle(idToken);
+        if (!canPlay) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                    'Bạn đã hết lượt chơi puzzle hôm nay. Vui lòng nâng cấp lên Premium để chơi không giới hạn.'),
+                duration: Duration(seconds: 3),
+              ),
+            );
+          }
+          return;
+        }
+
+        // Get a random puzzle from the list
+        final random = DateTime.now().millisecondsSinceEpoch % _puzzles!.length;
+        final puzzle = _puzzles![random];
+
+        // Tăng số lần chơi puzzle
+        await _puzzleService.incrementPuzzleCount(idToken);
+
+        _openPuzzle(puzzle);
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Lỗi: ${e.toString()}')),
+          );
+        }
+      }
     }
   }
 

@@ -366,7 +366,7 @@ class _ChessboardState extends State<Chessboard> {
                 CircleAvatar(
                   radius: 16,
                   backgroundImage: player.picture.isNotEmpty
-                      ? NetworkImage("${player.picture}/small")
+                      ? NetworkImage("${player.picture}/large")
                       : const AssetImage('assets/default_avt.jpg')
                           as ImageProvider,
                   backgroundColor: Colors.grey[300],

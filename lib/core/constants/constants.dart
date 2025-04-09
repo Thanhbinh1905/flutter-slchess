@@ -10,6 +10,8 @@ class ApiConstants {
   static String get getUploadImageUrl => "$baseUrl/avatar/upload";
   static String get getPulzzesUrl => "$baseUrl/puzzles";
   static String get getPulzzeUrl => "$baseUrl/puzzle";
+  static String get matchResult => "$baseUrl/matchResults";
+
   static String getHistoryMatchUrl(String matchId) =>
       "$baseUrl/match/$matchId/states?limit=1000";
 }
