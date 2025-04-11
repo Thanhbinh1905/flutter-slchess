@@ -26,8 +26,8 @@ class PuzzleProfile {
 
   factory PuzzleProfile.fromJson(Map<String, dynamic> json) {
     return PuzzleProfile(
-      userId: json['userId'],
-      rating: json['rating'],
+      userId: json['userId'] ?? '',
+      rating: json['rating'] ?? 300,
       dailyPuzzleCount: json['dailyPuzzleCount'] ?? 0,
       lastPlayDate:
           DateTime.tryParse(json['lastPlayDate'] ?? '') ?? DateTime.now(),

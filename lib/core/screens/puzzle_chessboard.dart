@@ -4,6 +4,7 @@ import 'package:flutter_slchess/core/models/puzzle_model.dart';
 import 'package:flutter_slchess/core/services/puzzle_service.dart';
 import 'dart:math' as math;
 import 'dart:async';
+import 'package:flutter_slchess/core/services/user_service.dart';
 
 class PuzzleChessboard extends StatefulWidget {
   final Puzzle puzzle;
@@ -32,6 +33,7 @@ class _PuzzleChessboardState extends State<PuzzleChessboard> {
   String? lastMoveTo;
   String? lastHintMoveFrom;
   String? lastHintMoveTo;
+  int? newRating;
 
   // Các biến UI
   Set<String> validSquares = {};
@@ -343,14 +345,43 @@ class _PuzzleChessboardState extends State<PuzzleChessboard> {
     }
   }
 
-  void _onPuzzleSolved() {
-    setState(() {
-      isPuzzleSolved = true;
-      message = "Puzzle đã được giải thành công!";
-    });
+  void _onPuzzleSolved() async {
+    try {
+      setState(() {
+        isPuzzleSolved = true;
+        message = "Puzzle đã được giải thành công!";
+      });
 
-    // Gửi thông báo đến server
-    _puzzleService.solvedPuzzle(widget.idToken, widget.puzzle);
+      // Gửi thông báo đến server và đợi kết quả
+      final updatedRating =
+          await _puzzleService.solvedPuzzle(widget.idToken, widget.puzzle);
+
+      if (updatedRating != null) {
+        setState(() {
+          newRating = updatedRating;
+          message = "Puzzle đã được giải thành công!";
+        });
+      } else {
+        // Nếu không có rating mới, thử lấy từ cache
+        final userService = UserService();
+        final user = await userService.getPlayer();
+        if (user != null) {
+          final profile = await _puzzleService.getProfileFromCache(user.id);
+          if (profile != null) {
+            setState(() {
+              newRating = profile.rating;
+              message =
+                  "Puzzle đã được giải thành công! Rating mới: ${profile.rating}";
+            });
+          }
+        }
+      }
+    } catch (e) {
+      print("Lỗi khi xử lý giải puzzle: $e");
+      setState(() {
+        message = "Đã giải puzzle, nhưng có lỗi khi cập nhật điểm!";
+      });
+    }
   }
 
   void _resetPuzzle() {
@@ -398,7 +429,9 @@ class _PuzzleChessboardState extends State<PuzzleChessboard> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    'Rating: ${widget.puzzle.rating}',
+                    newRating != null
+                        ? 'Rating: $newRating'
+                        : 'Rating: ${widget.puzzle.rating}',
                     style: const TextStyle(color: Colors.white),
                   ),
                   Text(
