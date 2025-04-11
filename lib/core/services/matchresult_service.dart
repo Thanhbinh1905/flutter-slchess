@@ -47,7 +47,6 @@ class MatchResultService {
 
         return results;
       } else {
-        // Nếu API lỗi, thử lấy từ cache
         final cachedResults = await _getCachedMatchResults(userId);
         if (cachedResults != null) {
           return cachedResults;

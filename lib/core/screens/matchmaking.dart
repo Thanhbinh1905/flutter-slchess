@@ -261,16 +261,29 @@ Widget buildUserAvatar(UserModel user) {
       shape: BoxShape.circle,
       color: Colors.white.withOpacity(0.1),
       border: Border.all(color: Colors.white, width: 2),
-      image: user.picture.isNotEmpty
-          ? DecorationImage(
-              image: NetworkImage("${user.picture}/large"),
+    ),
+    child: user.picture.isNotEmpty
+        ? ClipRRect(
+            borderRadius: BorderRadius.circular(25),
+            child: Image.network(
+              "${user.picture}/large",
               fit: BoxFit.cover,
-            )
-          : const DecorationImage(
-              image: AssetImage('assets/default_avt.jpg'),
+              errorBuilder: (context, error, stackTrace) {
+                print('Error loading avatar: $error');
+                return Image.asset(
+                  'assets/default_avt.jpg',
+                  fit: BoxFit.cover,
+                );
+              },
+            ),
+          )
+        : ClipRRect(
+            borderRadius: BorderRadius.circular(25),
+            child: Image.asset(
+              'assets/default_avt.jpg',
               fit: BoxFit.cover,
             ),
-    ),
+          ),
   );
 }
 

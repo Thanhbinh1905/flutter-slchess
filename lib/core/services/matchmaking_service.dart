@@ -153,8 +153,8 @@ class MatchMakingSerice {
 
   Future<MatchModel?> getQueue(String idToken, String gameMode, double rating,
       {int minRating = 0, int maxRating = 100}) async {
-    minRating = minRating == 0 ? (rating - 50).toInt() : minRating;
-    maxRating = maxRating == 100 ? (rating + 50).toInt() : maxRating;
+    minRating = minRating == 0 ? (rating - 150).toInt() : minRating;
+    maxRating = maxRating == 100 ? (rating + 150).toInt() : maxRating;
     try {
       final response = await http.post(
         Uri.parse(_matchMakingApiUrl),

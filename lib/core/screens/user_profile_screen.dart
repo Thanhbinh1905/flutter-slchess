@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_slchess/core/models/user.dart';
-import 'package:flutter_slchess/core/services/amplify_auth_service.dart';
 import 'package:flutter_slchess/core/services/user_service.dart';
+import 'package:flutter_slchess/core/services/match_service.dart';
+import 'package:flutter_slchess/core/services/amplify_auth_service.dart';
+import 'package:flutter_slchess/core/models/historymatch_model.dart';
+import 'package:flutter_slchess/core/services/moveset_service.dart';
+import 'package:flutter_slchess/core/screens/review_chessboard.dart';
+import 'dart:io';
+import 'package:flutter_slchess/core/models/user.dart';
 import 'package:flutter_slchess/core/services/matchresult_service.dart';
 import 'package:flutter_slchess/core/models/matchresults_model.dart';
-import 'dart:io';
+import 'package:http/http.dart' as http;
 
 class UserProfileScreen extends StatefulWidget {
   const UserProfileScreen({super.key});
@@ -500,11 +505,31 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             ),
             child: CircleAvatar(
               radius: 24,
-              backgroundImage: match.opponentId.isNotEmpty
-                  ? NetworkImage(
-                      "https://slchess-dev-avatars.s3.ap-southeast-2.amazonaws.com/${match.opponentId}/small")
-                  : const AssetImage('assets/default_avt.jpg') as ImageProvider,
               backgroundColor: Colors.grey[300],
+              child: match.opponentId.isNotEmpty
+                  ? FutureBuilder(
+                      future: _checkImageExists(
+                          "https://slchess-dev-avatars.s3.ap-southeast-2.amazonaws.com/${match.opponentId}/small"),
+                      builder: (context, snapshot) {
+                        if (snapshot.hasData && snapshot.data == true) {
+                          return ClipRRect(
+                            borderRadius: BorderRadius.circular(24),
+                            child: Image.network(
+                              "https://slchess-dev-avatars.s3.ap-southeast-2.amazonaws.com/${match.opponentId}/small",
+                              fit: BoxFit.cover,
+                              width: 48,
+                              height: 48,
+                              errorBuilder: (context, error, stackTrace) {
+                                return _buildDefaultAvatar();
+                              },
+                            ),
+                          );
+                        } else {
+                          return _buildDefaultAvatar();
+                        }
+                      },
+                    )
+                  : _buildDefaultAvatar(),
             ),
           ),
           const SizedBox(width: 16),
@@ -551,7 +576,29 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             ],
           ),
           IconButton(
-            onPressed: () {},
+            onPressed: () async {
+              final idToken = await _authService.getIdToken();
+              if (idToken != null) {
+                final HistoryMatchModel historyMatch = await MoveSetService()
+                    .getHistoryMatch(match.matchId, idToken);
+
+                if (historyMatch.items.isNotEmpty) {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => ReviewChessboard(
+                        historyMatch: historyMatch,
+                      ),
+                    ),
+                  );
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Không thể tải dữ liệu ván cờ'),
+                    ),
+                  );
+                }
+              }
+            },
             icon: const Icon(Icons.analytics, color: Colors.blue),
           ),
         ],
@@ -562,4 +609,47 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   String _formatDate(DateTime date) {
     return '${date.day}/${date.month}/${date.year}';
   }
+
+  Widget _buildDefaultAvatar() {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(24),
+      child: Image.asset(
+        'assets/default_avt.jpg',
+        fit: BoxFit.cover,
+        width: 48,
+        height: 48,
+      ),
+    );
+  }
+
+  Future<bool> _checkImageExists(String url) async {
+    try {
+      final response = await http.head(Uri.parse(url));
+      return response.statusCode == 200;
+    } catch (e) {
+      return false;
+    }
+  }
 }
+
+final hehe = {
+  "items": [
+    {
+      "id": "adb3672e-9d24-4034-86a7-4bc528d6f812",
+      "matchId": "a2c203c2-0886-4f58-98be-c6849b10d4ac",
+      "playerStates": [
+        {"clock": "9m52.767983025s", "status": "CONNECTED"},
+        {"clock": "10m0s", "status": "INIT"}
+      ],
+      "gameState":
+          "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1",
+      "move": {
+        "playerId": "091ef4a8-b0b1-7088-f6b2-2596f366e959",
+        "uci": "e2e4"
+      },
+      "ply": 1,
+      "timestamp": "2025-04-10T19:07:44.89277292Z"
+    }
+  ],
+  "nextPageToken": null
+};

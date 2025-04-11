@@ -1,5 +1,3 @@
-import 'package:chess/chess.dart';
-
 class EvaluationModel {
   final String fen;
   final int depth;
