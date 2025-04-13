@@ -62,6 +62,12 @@ class _ChessboardState extends State<Chessboard> {
   late String server;
   bool enableFlip = true;
   late bool isWhite;
+  bool _isChatVisible = false;
+
+  // Chat
+  final TextEditingController _chatController = TextEditingController();
+  final List<ChatMessage> _chatMessages = [];
+  final ScrollController _chatScrollController = ScrollController();
 
   // Websocket and services
   late MatchWebsocketService matchService;
@@ -85,6 +91,32 @@ class _ChessboardState extends State<Chessboard> {
 
     _initializeUIControls();
     _startClock();
+
+    // Thêm tin nhắn demo nếu đang chơi online
+    if (isOnline) {
+      _addDemoChatMessages();
+    }
+  }
+
+  // Thêm một số tin nhắn demo để minh họa
+  void _addDemoChatMessages() {
+    _chatMessages.add(
+      ChatMessage(
+        sender: matchModel.player2.user.username,
+        message: 'Chào bạn, chúc một ván đấu vui vẻ!',
+        time: DateTime.now().subtract(const Duration(minutes: 2)),
+        isCurrentUser: false,
+      ),
+    );
+
+    _chatMessages.add(
+      ChatMessage(
+        sender: matchModel.player1.user.username,
+        message: 'Cảm ơn, chúc bạn may mắn!',
+        time: DateTime.now().subtract(const Duration(minutes: 1)),
+        isCurrentUser: true,
+      ),
+    );
   }
 
   Future<void> _initializeGameState() async {
@@ -284,6 +316,18 @@ class _ChessboardState extends State<Chessboard> {
     }
   }
 
+  void _scrollChatToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_chatScrollController.hasClients) {
+        _chatScrollController.animateTo(
+          _chatScrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+  }
+
   void switchTurn() {
     _stopwatch.reset();
     _stopwatch.start();
@@ -292,20 +336,48 @@ class _ChessboardState extends State<Chessboard> {
     });
   }
 
+  // Gửi tin nhắn chat
+  void _sendMessage() {
+    if (_chatController.text.trim().isEmpty) return;
+
+    setState(() {
+      _chatMessages.add(
+        ChatMessage(
+          sender: matchModel.player1.user.username,
+          message: _chatController.text.trim(),
+          time: DateTime.now(),
+          isCurrentUser: true,
+        ),
+      );
+      _chatController.clear();
+    });
+
+    _scrollChatToBottom();
+
+    // TODO: Gửi tin nhắn qua WebSocket trong phiên bản thực tế
+  }
+
+  // Chuyển đổi hiển thị chat
+  void _toggleChat() {
+    setState(() {
+      _isChatVisible = !_isChatVisible;
+    });
+
+    if (_isChatVisible) {
+      _scrollChatToBottom();
+    }
+  }
+
   @override
   void dispose() {
     timer?.cancel();
     _stopwatch.stop();
     _scrollController.dispose();
+    _chatScrollController.dispose();
+    _chatController.dispose();
     super.dispose();
   }
 
-// decoration: const BoxDecoration(
-//           image: DecorationImage(
-//             image: AssetImage('assets/bg_dark.png'),
-//             fit: BoxFit.cover,
-//           ),
-//         ),
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -317,17 +389,176 @@ class _ChessboardState extends State<Chessboard> {
             fit: BoxFit.cover,
           ),
         ),
-        child: Column(
+        child: Stack(
           children: [
-            if (!isOnline) gameHistory(game),
-            _buildPlayerPanel(!isWhite),
-            handleChessBoard(),
-            _buildPlayerPanel(isWhite),
+            Column(
+              children: [
+                if (!isOnline) gameHistory(game),
+                _buildPlayerPanel(!isWhite),
+                handleChessBoard(),
+                _buildPlayerPanel(isWhite),
+              ],
+            ),
+            if (_isChatVisible) _buildChatOverlay(),
           ],
         ),
       ),
       bottomNavigationBar: _buildBottomAppBar(),
     );
+  }
+
+  Widget _buildChatOverlay() {
+    return Positioned.fill(
+      child: Container(
+        color: Colors.black.withOpacity(0.7),
+        child: Column(
+          children: [
+            Container(
+              color: const Color(0xFF0E1416),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Row(
+                children: [
+                  const Text(
+                    'Trò chuyện',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 18,
+                    ),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.close, color: Colors.white),
+                    onPressed: _toggleChat,
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: ListView.builder(
+                controller: _chatScrollController,
+                padding: const EdgeInsets.all(16),
+                itemCount: _chatMessages.length,
+                itemBuilder: (context, index) {
+                  final message = _chatMessages[index];
+                  return _buildChatMessage(message);
+                },
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+              color: const Color(0xFF1A1B1A),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _chatController,
+                      style: const TextStyle(color: Colors.white),
+                      decoration: InputDecoration(
+                        hintText: 'Nhập tin nhắn...',
+                        hintStyle: TextStyle(color: Colors.grey.shade400),
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 8),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(24),
+                          borderSide: BorderSide.none,
+                        ),
+                        filled: true,
+                        fillColor: Colors.grey.shade800,
+                      ),
+                      onSubmitted: (_) => _sendMessage(),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    decoration: const BoxDecoration(
+                      color: Colors.blue,
+                      shape: BoxShape.circle,
+                    ),
+                    child: IconButton(
+                      icon: const Icon(Icons.send, color: Colors.white),
+                      onPressed: _sendMessage,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildChatMessage(ChatMessage message) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        mainAxisAlignment: message.isCurrentUser
+            ? MainAxisAlignment.end
+            : MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (!message.isCurrentUser) ...[
+            CircleAvatar(
+              radius: 16,
+              backgroundImage: const AssetImage('assets/default_avt.jpg'),
+              backgroundColor: Colors.grey[300],
+            ),
+            const SizedBox(width: 8),
+          ],
+          Flexible(
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: message.isCurrentUser
+                    ? Colors.blue.shade700
+                    : Colors.grey.shade800,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (!message.isCurrentUser)
+                    Text(
+                      message.sender,
+                      style: TextStyle(
+                        color: Colors.blue.shade300,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                  const SizedBox(height: 2),
+                  Text(
+                    message.message,
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    _formatTime(message.time),
+                    style: TextStyle(
+                      color: Colors.grey.shade400,
+                      fontSize: 10,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (message.isCurrentUser) ...[
+            const SizedBox(width: 8),
+            CircleAvatar(
+              radius: 16,
+              backgroundImage: const AssetImage('assets/default_avt.jpg'),
+              backgroundColor: Colors.grey[300],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  String _formatTime(DateTime time) {
+    return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
   }
 
   AppBar _buildAppBar() {
@@ -420,6 +651,14 @@ class _ChessboardState extends State<Chessboard> {
               icon: Icons.storage,
             ),
           ),
+          if (isOnline)
+            Expanded(
+              child: _bottomAppBarBtn(
+                "Chat",
+                _toggleChat,
+                icon: Icons.chat,
+              ),
+            ),
           if (!isOnline) ...[
             Expanded(
               child: _bottomAppBarBtn(
@@ -1262,4 +1501,18 @@ class _ChessboardState extends State<Chessboard> {
           Text(text, style: const TextStyle(fontSize: 16, color: Colors.black)),
     );
   }
+}
+
+class ChatMessage {
+  final String sender;
+  final String message;
+  final DateTime time;
+  final bool isCurrentUser;
+
+  ChatMessage({
+    required this.sender,
+    required this.message,
+    required this.time,
+    required this.isCurrentUser,
+  });
 }

@@ -8,58 +8,135 @@ import 'package:chess/chess.dart';
 
 class EvaluationService {
   final WebSocketChannel channel;
+  bool _isConnected = false;
 
-  EvaluationService._(this.channel);
+  // Callback khi có thay đổi trạng thái kết nối
+  final Function(bool isConnected)? onConnectionChange;
 
-  factory EvaluationService.startGame(String idToken) {
+  EvaluationService._(this.channel, this.onConnectionChange);
+
+  factory EvaluationService.startGame(String idToken,
+      {Function(bool)? onConnectionChange}) {
+    print("Kết nối đến websocket đánh giá: ${WebsocketConstants.wsUrl}");
+
     final channel = IOWebSocketChannel.connect(
       Uri.parse(WebsocketConstants.wsUrl),
       headers: {
         'Content-Type': 'application/json',
         'Authorization': idToken,
       },
+      pingInterval:
+          const Duration(seconds: 10), // Gửi ping định kỳ để giữ kết nối
     );
-    return EvaluationService._(channel);
+
+    final service = EvaluationService._(channel, onConnectionChange);
+
+    // Đánh dấu kết nối thành công ngay từ đầu
+    service._isConnected = true;
+    onConnectionChange?.call(true);
+
+    return service;
   }
 
   void listen(
       {void Function(EvaluationModel evaluationModel)? onEvaluation,
+      void Function(dynamic error)? onError,
       required BuildContext context}) {
-    channel.stream.listen((message) {
-      try {
-        final data = jsonDecode(message);
-        final evaluationModel = EvaluationModel.fromJson(data);
-        onEvaluation?.call(evaluationModel);
-      } catch (e) {
-        print(e);
-      }
-    });
+    channel.stream.listen(
+      (message) {
+        try {
+          if (!_isConnected) {
+            _isConnected = true;
+            onConnectionChange?.call(true);
+          }
+
+          // Xử lý tin nhắn
+          final data = jsonDecode(message);
+          final evaluationModel = EvaluationModel.fromJson(data);
+          onEvaluation?.call(evaluationModel);
+        } catch (e) {
+          print("Lỗi khi xử lý tin nhắn từ websocket: $e");
+          if (onError != null) {
+            onError(e);
+          }
+        }
+      },
+      onError: (error) {
+        print("Lỗi websocket: $error");
+        _isConnected = false;
+        onConnectionChange?.call(false);
+        if (onError != null) {
+          onError(error);
+        }
+      },
+      onDone: () {
+        print("Kết nối websocket đã đóng");
+        _isConnected = false;
+        onConnectionChange?.call(false);
+      },
+    );
   }
 
   void sendEvaluation(String fen) {
-    channel.sink.add(jsonEncode({
-      'action': 'evaluate',
-      'message': fen,
-    }));
+    if (!_isConnected) {
+      print("Cảnh báo: Đang gửi yêu cầu đánh giá khi chưa kết nối");
+    }
+
+    try {
+      print("Gửi yêu cầu đánh giá FEN: $fen");
+      channel.sink.add(jsonEncode({
+        'action': 'evaluate',
+        'message': fen,
+      }));
+    } catch (e) {
+      print("Lỗi khi gửi yêu cầu đánh giá: $e");
+    }
   }
 
+  bool get isConnected => _isConnected;
+
   void close() {
-    channel.sink.close();
+    try {
+      print("Đóng kết nối websocket đánh giá");
+      channel.sink.close();
+      _isConnected = false;
+      onConnectionChange?.call(false);
+    } catch (e) {
+      print("Lỗi khi đóng kết nối websocket: $e");
+    }
   }
 
   List<dynamic> convertUciToSan(String uciMoves, String initialFen) {
-    final chess = Chess.fromFEN(initialFen);
-    final moves = uciMoves.split(' ');
+    try {
+      final chess = Chess.fromFEN(initialFen);
+      final moves = uciMoves.split(' ');
 
-    for (final move in moves) {
-      if (move.length == 4) {
-        final from = move.substring(0, 2);
-        final to = move.substring(2, 4);
-        chess.move({'from': from, 'to': to});
+      for (final move in moves) {
+        if (move.isEmpty) continue;
+
+        if (move.length >= 4) {
+          final from = move.substring(0, 2);
+          final to = move.substring(2, 4);
+          String? promotion;
+
+          if (move.length > 4) {
+            promotion = move.substring(4, 5);
+          }
+
+          final moveObj = {'from': from, 'to': to};
+          if (promotion != null) {
+            moveObj['promotion'] = promotion;
+          }
+
+          chess.move(moveObj);
+        }
       }
-    }
 
-    return chess.getHistory();
+      return chess.getHistory();
+    } catch (e) {
+      print("Lỗi khi chuyển đổi UCI sang SAN: $e");
+      return [];
+    }
   }
 }
 

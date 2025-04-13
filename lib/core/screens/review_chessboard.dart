@@ -79,7 +79,12 @@ class _ReviewChessboardState extends State<ReviewChessboard> {
       final item = widget.historyMatch.items[i];
       final from = item.move.uci.substring(0, 2);
       final to = item.move.uci.substring(2, 4);
-      game.move({'from': from, 'to': to});
+      if (item.move.uci.length > 4) {
+        final promotion = item.move.uci.substring(4, 5);
+        game.move({'from': from, 'to': to, 'promotion': promotion});
+      } else {
+        game.move({'from': from, 'to': to});
+      }
     }
 
     moves.clear();
@@ -356,7 +361,7 @@ class _ReviewChessboardState extends State<ReviewChessboard> {
   }
 
   Widget _buildChessSquare(int index) {
-    int transformedIndex = 63 - index;
+    int transformedIndex = index;
     int row = transformedIndex ~/ 8;
     int col = transformedIndex % 8;
     String coor = parsePieceCoordinate(col, row);

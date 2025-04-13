@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 
 import 'play_screen.dart';
 import 'puzzle_screen.dart';
+import 'leaderboard_screen.dart';
+import 'analysis_screen.dart';
+// import 'settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -12,6 +15,12 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
+
+  void _onTap(int index) {
+    setState(() {
+      _currentIndex = index;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -51,18 +60,10 @@ class _HomeScreenState extends State<HomeScreen> {
           children: const [
             PlayPage(),
             PuzzleScreen(),
-            Center(
-              child: Text(
-                'Bảng xếp hạng sẽ có trong phiên bản tới',
-                style: TextStyle(color: Colors.white, fontSize: 16),
-              ),
-            ),
-            Center(
-              child: Text(
-                'Cài đặt sẽ có trong phiên bản tới',
-                style: TextStyle(color: Colors.white, fontSize: 16),
-              ),
-            ),
+            AnalysisScreen(),
+            LeaderboardScreen(),
+            Text("Settings"),
+            // SettingsPage(),
           ],
         ),
       ),
@@ -79,11 +80,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         child: BottomNavigationBar(
           currentIndex: _currentIndex,
-          onTap: (index) {
-            setState(() {
-              _currentIndex = index;
-            });
-          },
+          onTap: _onTap,
           backgroundColor: const Color(0xFF0E1416),
           selectedItemColor: Colors.white,
           unselectedItemColor: Colors.grey,
@@ -97,6 +94,10 @@ class _HomeScreenState extends State<HomeScreen> {
             BottomNavigationBarItem(
               icon: Icon(Icons.extension),
               label: "Câu đố",
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.analytics),
+              label: "Phân tích",
             ),
             BottomNavigationBarItem(
               icon: Icon(Icons.leaderboard),

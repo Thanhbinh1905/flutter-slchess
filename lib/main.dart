@@ -14,6 +14,7 @@ import 'core/screens/matchmaking.dart';
 import 'core/screens/upload_image_screen.dart';
 import 'core/screens/user_profile_screen.dart';
 import 'core/screens/puzzle_chessboard.dart';
+import 'core/screens/leaderboard_screen.dart';
 import 'core/models/user.dart';
 import 'core/models/matchresults_model.dart';
 import 'core/services/matchresult_service.dart';
@@ -129,6 +130,9 @@ class MyApp extends StatelessWidget {
           case '/uploadImage':
             return MaterialPageRoute(
                 builder: (context) => const UploadImageScreen());
+          case '/user_ratings':
+            return MaterialPageRoute(
+                builder: (context) => const LeaderboardScreen());
           case '/matchmaking':
             final args = settings.arguments;
             if (args is Map) {
