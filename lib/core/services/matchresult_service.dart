@@ -30,7 +30,7 @@ class MatchResultService {
   Future<MatchResultsModel> getMatchResults(
       String userId, String idToken) async {
     try {
-      // Lấy từ API trước
+      // Lấy từ API
       final response = await http.get(
         Uri.parse(ApiConstants.matchResult),
         headers: {
@@ -47,19 +47,10 @@ class MatchResultService {
 
         return results;
       } else {
-        final cachedResults = await _getCachedMatchResults(userId);
-        if (cachedResults != null) {
-          return cachedResults;
-        }
         throw Exception('Không thể lấy kết quả trận đấu');
       }
     } catch (e) {
-      // Nếu có lỗi khi gọi API, thử lấy từ cache
-      final cachedResults = await _getCachedMatchResults(userId);
-      if (cachedResults != null) {
-        return cachedResults;
-      }
-      print('Error fetching match results from API: $e');
+      print('Lỗi khi lấy kết quả trận đấu: $e');
       throw Exception('Lỗi khi lấy kết quả trận đấu: $e');
     }
   }

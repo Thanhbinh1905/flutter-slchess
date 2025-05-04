@@ -154,7 +154,12 @@ class _PuzzleScreenState extends State<PuzzleScreen> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: const Color(0xFF1A1B1A),
+      decoration: const BoxDecoration(
+        image: DecorationImage(
+          image: AssetImage('assets/bg_dark.png'),
+          fit: BoxFit.cover,
+        ),
+      ),
       child: Column(
         children: [
           Container(

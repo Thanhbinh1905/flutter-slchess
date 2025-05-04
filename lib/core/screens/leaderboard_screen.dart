@@ -6,6 +6,7 @@ import '../models/user.dart';
 import '../services/user_service.dart';
 import '../services/user_ratings_service.dart';
 import 'package:amplify_flutter/amplify_flutter.dart';
+import '../constants/app_styles.dart';
 
 class LeaderboardScreen extends StatefulWidget {
   const LeaderboardScreen({super.key});
@@ -94,31 +95,14 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'Bảng Xếp Hạng',
-          style: TextStyle(
-            fontSize: 22,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ),
-        ),
-        backgroundColor: const Color(0xFF0E1416),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.of(context).pop(),
+    return Container(
+      decoration: const BoxDecoration(
+        image: DecorationImage(
+          image: AssetImage('assets/bg_dark.png'),
+          fit: BoxFit.cover,
         ),
       ),
-      body: Container(
-        decoration: const BoxDecoration(
-          image: DecorationImage(
-            image: AssetImage('assets/bg_dark.png'),
-            fit: BoxFit.cover,
-          ),
-        ),
-        child: _buildRatingsContent(),
-      ),
+      child: _buildRatingsContent(),
     );
   }
 
@@ -126,7 +110,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     if (_isLoading) {
       return const Center(
         child: CircularProgressIndicator(
-          color: Colors.white,
+          color: AppStyles.primaryColor,
         ),
       );
     }
@@ -138,10 +122,11 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
           children: [
             Text(
               'Lỗi: $_error',
-              style: const TextStyle(color: Colors.white),
+              style: AppStyles.bodyMedium.copyWith(color: Colors.white),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppStyles.defaultSpacing),
             ElevatedButton(
+              style: AppStyles.primaryButton,
               onPressed: _loadApiRatings,
               child: const Text('Thử lại'),
             ),
@@ -151,10 +136,10 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     }
 
     if (_apiRatings.isEmpty) {
-      return const Center(
+      return Center(
         child: Text(
           'Không có dữ liệu xếp hạng',
-          style: TextStyle(color: Colors.white),
+          style: AppStyles.bodyMedium.copyWith(color: Colors.white),
         ),
       );
     }
@@ -165,8 +150,8 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
         Expanded(
           child: RefreshIndicator(
             onRefresh: _loadApiRatings,
-            color: Colors.white,
-            backgroundColor: Colors.blue,
+            color: AppStyles.primaryColor,
+            backgroundColor: AppStyles.secondaryColor,
             child: ListView.builder(
               itemCount: _apiRatings.length,
               itemBuilder: (context, index) {
@@ -182,30 +167,30 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
 
   Widget _buildApiRatingsHeader() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: AppStyles.defaultPadding,
       decoration: BoxDecoration(
         color: Colors.black.withOpacity(0.6),
         border: const Border(
           bottom: BorderSide(color: Colors.grey, width: 0.5),
         ),
       ),
-      child: const Row(
+      child: Row(
         children: [
           SizedBox(
             width: 40,
             child: Text(
               'XH',
-              style: TextStyle(
+              style: AppStyles.bodyMedium.copyWith(
                 color: Colors.grey,
                 fontWeight: FontWeight.bold,
               ),
             ),
           ),
-          SizedBox(width: 16),
+          const SizedBox(width: AppStyles.defaultSpacing),
           Expanded(
             child: Text(
               'Người chơi',
-              style: TextStyle(
+              style: AppStyles.bodyMedium.copyWith(
                 color: Colors.grey,
                 fontWeight: FontWeight.bold,
               ),
@@ -213,7 +198,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
           ),
           Text(
             'Điểm',
-            style: TextStyle(
+            style: AppStyles.bodyMedium.copyWith(
               color: Colors.grey,
               fontWeight: FontWeight.bold,
             ),
@@ -224,7 +209,6 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
   }
 
   Widget _buildApiRatingRow(UserRating rating, int index) {
-    // Lấy thông tin người dùng từ cache nếu có
     final user = _userCache[rating.userId];
 
     return Container(
@@ -233,71 +217,62 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
         color: index % 2 == 0
             ? Colors.black.withOpacity(0.3)
             : Colors.black.withOpacity(0.5),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: AppStyles.defaultBorderRadius,
       ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        padding: AppStyles.smallPadding,
         child: Row(
           children: [
-            // Xếp hạng
             SizedBox(
               width: 40,
               child: _buildRankWidget(index + 1),
             ),
-            const SizedBox(width: 16),
-
-            // Thông tin người dùng
+            const SizedBox(width: AppStyles.defaultSpacing),
             Expanded(
               child: Row(
                 children: [
-                  // Avatar
                   CircleAvatar(
                     radius: 16,
                     backgroundImage: user != null && user.picture.isNotEmpty
-                        ? NetworkImage("${user.picture}/small")
+                        ? NetworkImage("${user.picture}/large")
                         : null,
-                    backgroundColor: Colors.blue.shade700,
+                    backgroundColor: AppStyles.defaultAvt,
                     child: user == null || user.picture.isEmpty
                         ? Text(
                             user?.username.substring(0, 1).toUpperCase() ??
                                 rating.userId.substring(0, 2).toUpperCase(),
-                            style: const TextStyle(
-                              color: Colors.white,
+                            style: AppStyles.bodySmall.copyWith(
+                              color: Colors.black,
                               fontWeight: FontWeight.bold,
-                              fontSize: 12,
                             ),
                           )
                         : null,
                   ),
-                  const SizedBox(width: 12),
-                  // Tên người dùng hoặc ID
+                  const SizedBox(width: AppStyles.smallSpacing),
                   Expanded(
                     child: Text(
                       user?.username ??
                           'ID: ${rating.userId.substring(0, 10)}...',
-                      style: const TextStyle(
+                      style: AppStyles.bodyMedium.copyWith(
                         color: Colors.white,
-                        overflow: TextOverflow.ellipsis,
                       ),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ],
               ),
             ),
-
-            // Điểm xếp hạng
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              padding: AppStyles.smallPadding,
               decoration: BoxDecoration(
-                color: Colors.blue.shade800,
-                borderRadius: BorderRadius.circular(16),
+                color: Colors.black.withOpacity(0.3),
+                borderRadius: AppStyles.defaultBorderRadius,
               ),
               child: Text(
                 '${rating.rating}',
-                style: const TextStyle(
+                style: AppStyles.bodyMedium.copyWith(
                   color: Colors.white,
                   fontWeight: FontWeight.bold,
-                  fontSize: 16,
                 ),
               ),
             ),
@@ -326,7 +301,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
         child: Center(
           child: Text(
             '$rank',
-            style: const TextStyle(
+            style: AppStyles.bodyMedium.copyWith(
               color: Colors.white,
               fontWeight: FontWeight.bold,
             ),
@@ -337,7 +312,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
 
     return Text(
       '$rank',
-      style: const TextStyle(
+      style: AppStyles.bodyMedium.copyWith(
         color: Colors.white,
         fontWeight: FontWeight.w500,
       ),
@@ -348,13 +323,13 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
   Color _getRankColor(int rank) {
     switch (rank) {
       case 1:
-        return Colors.amber.shade700; // Vàng
+        return AppStyles.warningColor;
       case 2:
-        return Colors.grey.shade400; // Bạc
+        return AppStyles.infoColor;
       case 3:
-        return Colors.brown.shade400; // Đồng
+        return AppStyles.errorColor;
       default:
-        return Colors.blue.shade700; // Xanh dương
+        return AppStyles.secondaryColor;
     }
   }
 }

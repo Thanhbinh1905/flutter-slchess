@@ -259,21 +259,7 @@ class PuzzleService {
 
   Future<PuzzleProfile> getPuzzleRatingFromCacheOrAPI(String idToken) async {
     try {
-      // Get current user ID
-      final userService = UserService();
-      final user = await userService.getPlayer();
-
-      // Try to get from cache first
-      if (user != null) {
-        print("User found in cache: ${user.id}");
-        final cachedProfile = await getProfileFromCache(user.id);
-        if (cachedProfile != null) {
-          print("Found puzzle profile in cache: ${cachedProfile.rating}");
-          return cachedProfile;
-        }
-      }
-
-      // If not found in cache, fetch from API
+      // Lấy từ API trực tiếp
       print("Fetching puzzle profile from API...");
       final apiProfile = await getPuzzleProfile(idToken);
       return apiProfile;

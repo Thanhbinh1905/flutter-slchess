@@ -3,6 +3,7 @@ import 'package:flutter_slchess/core/services/amplify_auth_service.dart';
 import 'package:flutter_slchess/core/models/historymatch_model.dart';
 import 'package:flutter_slchess/core/screens/analysis_chessboard.dart';
 import 'package:intl/intl.dart';
+import '../constants/app_styles.dart';
 
 class AnalysisScreen extends StatefulWidget {
   const AnalysisScreen({super.key});
@@ -111,7 +112,7 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
         child: _isLoading
             ? const Center(
                 child: CircularProgressIndicator(
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                  color: AppStyles.primaryColor,
                 ),
               )
             : _error != null
@@ -121,11 +122,13 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
                       children: [
                         Text(
                           _error!,
-                          style: const TextStyle(color: Colors.white),
+                          style: AppStyles.bodyMedium
+                              .copyWith(color: Colors.white),
                           textAlign: TextAlign.center,
                         ),
-                        const SizedBox(height: 20),
+                        const SizedBox(height: AppStyles.defaultSpacing),
                         ElevatedButton(
+                          style: AppStyles.primaryButton,
                           onPressed: _loadMatchHistory,
                           child: const Text('Thử lại'),
                         ),
@@ -143,9 +146,7 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _buildHeader(),
-          const SizedBox(height: 10),
           _buildImportPgnButton(),
-          const SizedBox(height: 16),
           _buildAnalysisOptions(),
         ],
       ),
@@ -154,14 +155,14 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
 
   Widget _buildHeader() {
     return Padding(
-      padding: const EdgeInsets.all(16.0),
+      padding: AppStyles.defaultPadding,
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Colors.blue.shade700,
-              borderRadius: BorderRadius.circular(10),
+            padding: AppStyles.smallPadding,
+            decoration: const BoxDecoration(
+              color: AppStyles.primaryColor,
+              borderRadius: AppStyles.defaultBorderRadius,
             ),
             child: const Icon(
               Icons.analytics,
@@ -169,24 +170,17 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
               size: 30,
             ),
           ),
-          const SizedBox(width: 12),
-          const Column(
+          const SizedBox(width: AppStyles.defaultSpacing),
+          Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 'Phân tích bàn cờ',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                ),
+                style: AppStyles.heading2.copyWith(color: Colors.white),
               ),
               Text(
                 'Phân tích các ván cờ của bạn',
-                style: TextStyle(
-                  color: Colors.grey,
-                  fontSize: 14,
-                ),
+                style: AppStyles.bodySmall.copyWith(color: Colors.grey),
               ),
             ],
           ),
@@ -197,53 +191,50 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
 
   Widget _buildImportPgnButton() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+      padding: const EdgeInsets.symmetric(horizontal: 24),
       child: InkWell(
         onTap: () {
-          // TODO: Implement PGN import
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Tính năng đang được phát triển')),
+            const SnackBar(
+              content: Text(
+                'Tính năng đang được phát triển',
+                style: AppStyles.bodyMedium,
+              ),
+            ),
           );
         },
         child: Container(
-          padding: const EdgeInsets.all(16),
+          padding: AppStyles.defaultPadding,
           decoration: BoxDecoration(
             color: Colors.black.withOpacity(0.3),
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: AppStyles.defaultBorderRadius,
             border: Border.all(color: Colors.grey.shade800),
           ),
           child: Row(
             children: [
               Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.amber.shade800,
-                  borderRadius: BorderRadius.circular(12),
+                padding: AppStyles.smallPadding,
+                decoration: const BoxDecoration(
+                  color: AppStyles.warningColor,
+                  borderRadius: AppStyles.defaultBorderRadius,
                 ),
                 child: const Icon(
                   Icons.upload_file,
                   color: Colors.white,
                 ),
               ),
-              const SizedBox(width: 16),
-              const Expanded(
+              const SizedBox(width: AppStyles.defaultSpacing),
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       'Nhập PGN',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
+                      style: AppStyles.heading4.copyWith(color: Colors.white),
                     ),
                     Text(
                       'Phân tích ván cờ từ file PGN',
-                      style: TextStyle(
-                        color: Colors.grey,
-                        fontSize: 14,
-                      ),
+                      style: AppStyles.bodySmall.copyWith(color: Colors.grey),
                     ),
                   ],
                 ),
@@ -262,44 +253,39 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
 
   Widget _buildAnalysisOptions() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+      padding: AppStyles.defaultPadding,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'Tạo bàn cờ phân tích',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
+            style: AppStyles.heading4.copyWith(color: Colors.white),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: AppStyles.smallSpacing),
           _buildCreateBoardButton(
             title: 'Bàn cờ mới',
             subtitle: 'Bắt đầu từ vị trí chuẩn',
             icon: Icons.add_circle_outline,
-            color: Colors.blue.shade700,
+            color: AppStyles.primaryColor,
             onTap: () => _createNewAnalysisBoard(),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: AppStyles.smallSpacing),
           _buildCreateBoardButton(
             title: 'Nhập FEN',
             subtitle: 'Tạo từ vị trí tùy chỉnh',
             icon: Icons.edit_note,
-            color: Colors.green.shade700,
+            color: AppStyles.successColor,
             onTap: () => _showFenInputDialog(),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: AppStyles.smallSpacing),
           _buildCreateBoardButton(
             title: 'Phân tích ván đấu đã chơi',
             subtitle: 'Xem các ván đấu gần đây',
             icon: Icons.history,
-            color: Colors.orange.shade700,
+            color: AppStyles.warningColor,
             onTap: () => _showHistoryMatchesList(),
           ),
-          const SizedBox(
-              height: 32), // Thêm khoảng cách dưới cùng để tránh bị cắt
+          const SizedBox(height: AppStyles.smallSpacing),
         ],
       ),
     );
@@ -316,19 +302,19 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
       onTap: onTap,
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
+        padding: AppStyles.defaultPadding,
         decoration: BoxDecoration(
           color: Colors.black.withOpacity(0.3),
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: AppStyles.defaultBorderRadius,
           border: Border.all(color: Colors.grey.shade800),
         ),
         child: Row(
           children: [
             Container(
-              padding: const EdgeInsets.all(16),
+              padding: AppStyles.smallPadding,
               decoration: BoxDecoration(
                 color: color,
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: AppStyles.defaultBorderRadius,
               ),
               child: Icon(
                 icon,
@@ -336,26 +322,19 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
                 size: 36,
               ),
             ),
-            const SizedBox(width: 20),
+            const SizedBox(width: AppStyles.defaultSpacing),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     title,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: AppStyles.heading4.copyWith(color: Colors.white),
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: AppStyles.smallSpacing),
                   Text(
                     subtitle,
-                    style: TextStyle(
-                      color: Colors.grey.shade400,
-                      fontSize: 14,
-                    ),
+                    style: AppStyles.bodySmall.copyWith(color: Colors.grey),
                   ),
                 ],
               ),
@@ -393,20 +372,22 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Nhập FEN'),
+        title: const Text('Nhập FEN', style: AppStyles.heading4),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               const Text(
                 'Nhập chuỗi FEN để tạo vị trí tùy chỉnh:',
-                style: TextStyle(fontSize: 14),
+                style: AppStyles.bodyMedium,
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: AppStyles.defaultSpacing),
               TextField(
                 controller: fenController,
                 decoration: const InputDecoration(
-                  border: OutlineInputBorder(),
+                  border: OutlineInputBorder(
+                    borderRadius: AppStyles.defaultBorderRadius,
+                  ),
                   hintText: 'Nhập FEN...',
                 ),
                 maxLines: 2,
@@ -417,12 +398,12 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Hủy'),
+            child: const Text('Hủy', style: AppStyles.bodyMedium),
           ),
           ElevatedButton(
+            style: AppStyles.primaryButton,
             onPressed: () {
               Navigator.pop(context);
-              // Tạo một HistoryMatchModel trống với FEN tùy chỉnh
               final fen = fenController.text.trim();
               if (fen.isNotEmpty) {
                 final emptyMatch = HistoryMatchModel(items: []);
@@ -437,7 +418,7 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
                 );
               }
             },
-            child: const Text('Tạo bàn cờ'),
+            child: const Text('Tạo bàn cờ', style: AppStyles.bodyMedium),
           ),
         ],
       ),
@@ -445,9 +426,13 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
   }
 
   void _showHistoryMatchesList() {
-    // Hiển thị danh sách các ván đấu đã chơi
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Tính năng đang được phát triển')),
+      const SnackBar(
+        content: Text(
+          'Tính năng đang được phát triển',
+          style: AppStyles.bodyMedium,
+        ),
+      ),
     );
   }
 }

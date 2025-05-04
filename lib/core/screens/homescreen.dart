@@ -4,6 +4,7 @@ import 'play_screen.dart';
 import 'puzzle_screen.dart';
 import 'leaderboard_screen.dart';
 import 'analysis_screen.dart';
+import 'profile_settings_screen.dart';
 // import 'settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -62,7 +63,7 @@ class _HomeScreenState extends State<HomeScreen> {
             PuzzleScreen(),
             AnalysisScreen(),
             LeaderboardScreen(),
-            Text("Settings"),
+            ProfileSettingsScreen(),
             // SettingsPage(),
           ],
         ),
