@@ -2,7 +2,7 @@ class Message {
   final String id;
   final String conversationId;
   final String senderId;
-  final String Username;
+  final String senderUsername;
   final String content;
   final String createdAt;
 
@@ -10,17 +10,17 @@ class Message {
     required this.id,
     required this.conversationId,
     required this.senderId,
-    required this.Username,
+    required this.senderUsername,
     required this.content,
     required this.createdAt,
   });
 
   factory Message.fromJson(Map<String, dynamic> json) {
     return Message(
-      id: json['Id'],
+      id: json['Id'],      
       conversationId: json['ConversationId'],
       senderId: json['SenderId'],
-      Username: json['Username'],
+      senderUsername: json['Username'],
       content: json['Content'],
       createdAt: json['CreatedAt'],
     );

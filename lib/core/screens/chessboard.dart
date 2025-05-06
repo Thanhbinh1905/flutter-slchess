@@ -7,6 +7,9 @@ import 'package:flutter_slchess/core/models/moveset_model.dart';
 import 'package:flutter_slchess/core/services/match_ws_service.dart';
 import 'package:flutter_slchess/core/services/amplify_auth_service.dart';
 import 'package:flutter_slchess/core/services/moveset_service.dart';
+import 'package:flutter_slchess/core/services/message_service.dart';
+import 'package:flutter_slchess/core/models/message_model.dart';
+import 'package:flutter_slchess/core/models/user.dart';
 
 import 'dart:async';
 import 'dart:math' as math;
@@ -33,6 +36,8 @@ class _ChessboardState extends State<Chessboard> {
   chess.Chess game = chess.Chess();
   // List<String> listFen = [];
   MoveSet? moveSet;
+
+  late UserModel currentUser;
 
   int halfmove = 0;
   late List<List<String?>> board;
@@ -68,6 +73,8 @@ class _ChessboardState extends State<Chessboard> {
   final TextEditingController _chatController = TextEditingController();
   final List<ChatMessage> _chatMessages = [];
   final ScrollController _chatScrollController = ScrollController();
+  late MessageService _messageService;
+  bool _isChatConnected = false;
 
   // Websocket and services
   late MatchWebsocketService matchService;
@@ -94,27 +101,18 @@ class _ChessboardState extends State<Chessboard> {
 
     // Thêm tin nhắn demo nếu đang chơi online
     if (isOnline) {
-      _addDemoChatMessages();
+      _addWelcomeMessage();
     }
   }
 
   // Thêm một số tin nhắn demo để minh họa
-  void _addDemoChatMessages() {
+  void _addWelcomeMessage() {
     _chatMessages.add(
       ChatMessage(
-        sender: matchModel.player2.user.username,
-        message: 'Chào bạn, chúc một ván đấu vui vẻ!',
+        sender: "",
+        message: 'Chúc một ván đấu vui vẻ!',
         time: DateTime.now().subtract(const Duration(minutes: 2)),
         isCurrentUser: false,
-      ),
-    );
-
-    _chatMessages.add(
-      ChatMessage(
-        sender: matchModel.player1.user.username,
-        message: 'Cảm ơn, chúc bạn may mắn!',
-        time: DateTime.now().subtract(const Duration(minutes: 1)),
-        isCurrentUser: true,
       ),
     );
   }
@@ -223,18 +221,68 @@ class _ChessboardState extends State<Chessboard> {
   }
 
   Future<void> _initializeOnlineGame() async {
-    board =
-        parseFEN('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1');
-    storedIdToken = await _amplifyAuthService.getIdToken();
-    matchService = MatchWebsocketService.startGame(
-        matchModel.matchId, storedIdToken!, server);
+    try {
+      board =
+          parseFEN('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1');
+      storedIdToken = await _amplifyAuthService.getIdToken();
+      currentUser = isWhite ? matchModel.player1.user : matchModel.player2.user;
 
-    matchService.listen(
-      onGameState: _handleGameStateUpdate,
-      onEndgame: _handleGameEnd,
-      onStatusChange: _handleStatusChange,
-      context: context,
-    );
+      // Thêm xử lý lỗi khi khởi tạo WebSocket
+      try {
+        matchService = MatchWebsocketService.startGame(
+            matchModel.matchId, storedIdToken!, server);
+
+        matchService.listen(
+          onGameState: _handleGameStateUpdate,
+          onEndgame: _handleGameEnd,
+          onStatusChange: _handleStatusChange,
+          context: context,
+        );
+      } catch (e) {
+        print("Lỗi kết nối WebSocket: $e");
+        // Hiển thị thông báo lỗi cho người dùng
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content:
+                  Text('Không thể kết nối đến máy chủ. Vui lòng thử lại sau.'),
+            ),
+          );
+        }
+        return;
+      }
+
+      // Khởi tạo MessageService cho chat
+      _messageService = MessageService.startMessage(
+          matchModel.conversationId, storedIdToken!);
+      _messageService.listen(
+        onMessage: _handleNewMessage,
+        onStatusChange: () {
+          if (mounted) {
+            setState(() {
+              _isChatConnected = !_isChatConnected;
+            });
+          }
+        },
+      );
+      print("join conversation");
+      print(matchModel.conversationId);
+      // Tham gia vào conversation
+      _messageService.joinConversation(
+        conversationId: matchModel.conversationId,
+        idToken: storedIdToken!,
+      );
+    } catch (e) {
+      print("Lỗi khởi tạo game online: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content:
+                Text('Có lỗi xảy ra khi khởi tạo game. Vui lòng thử lại sau.'),
+          ),
+        );
+      }
+    }
   }
 
   void _handleGameStateUpdate(GameState gameState) {
@@ -287,6 +335,7 @@ class _ChessboardState extends State<Chessboard> {
   }
 
   void _handleGameEnd(GameState gameState) {
+    if (!mounted) return;
     final winner = gameState.outcome == "1-0"
         ? "WHITE"
         : gameState.outcome == "0-1"
@@ -340,21 +389,32 @@ class _ChessboardState extends State<Chessboard> {
   void _sendMessage() {
     if (_chatController.text.trim().isEmpty) return;
 
-    setState(() {
-      _chatMessages.add(
-        ChatMessage(
-          sender: matchModel.player1.user.username,
-          message: _chatController.text.trim(),
-          time: DateTime.now(),
-          isCurrentUser: true,
-        ),
-      );
-      _chatController.clear();
+    final message = _chatController.text.trim();
+    _chatController.clear();
+
+    _messageService
+        .sendMessage(
+      conversationId: matchModel.conversationId,
+      senderId: currentUser.id,
+      content: message,
+      senderUsername: currentUser.username,
+      idToken: storedIdToken!,
+    )
+        .then((sentMessage) {
+      if (sentMessage != null) {
+        setState(() {
+          _chatMessages.add(
+            ChatMessage(
+              sender: sentMessage.senderUsername,
+              message: sentMessage.content,
+              time: DateTime.parse(sentMessage.createdAt),
+              isCurrentUser: true,
+            ),
+          );
+        });
+        _scrollChatToBottom();
+      }
     });
-
-    _scrollChatToBottom();
-
-    // TODO: Gửi tin nhắn qua WebSocket trong phiên bản thực tế
   }
 
   // Chuyển đổi hiển thị chat
@@ -368,6 +428,23 @@ class _ChessboardState extends State<Chessboard> {
     }
   }
 
+  void _handleNewMessage(Message message) {
+    if (!mounted) return;
+    if (message.senderId != currentUser.id) {
+      setState(() {
+        _chatMessages.add(
+          ChatMessage(
+            sender: message.senderUsername,
+            message: message.content,
+            time: DateTime.parse(message.createdAt),
+            isCurrentUser: message.senderId == currentUser.id,
+          ),
+        );
+      });
+      _scrollChatToBottom();
+    }
+  }
+
   @override
   void dispose() {
     timer?.cancel();
@@ -375,6 +452,10 @@ class _ChessboardState extends State<Chessboard> {
     _scrollController.dispose();
     _chatScrollController.dispose();
     _chatController.dispose();
+    if (isOnline) {
+      _messageService.leaveConversation(conversationId: matchModel.matchId);
+      _messageService.close();
+    }
     super.dispose();
   }
 
@@ -498,14 +579,6 @@ class _ChessboardState extends State<Chessboard> {
             : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (!message.isCurrentUser) ...[
-            CircleAvatar(
-              radius: 16,
-              backgroundImage: const AssetImage('assets/default_avt.jpg'),
-              backgroundColor: Colors.grey[300],
-            ),
-            const SizedBox(width: 8),
-          ],
           Flexible(
             child: Container(
               padding: const EdgeInsets.all(12),
@@ -544,14 +617,6 @@ class _ChessboardState extends State<Chessboard> {
               ),
             ),
           ),
-          if (message.isCurrentUser) ...[
-            const SizedBox(width: 8),
-            CircleAvatar(
-              radius: 16,
-              backgroundImage: const AssetImage('assets/default_avt.jpg'),
-              backgroundColor: Colors.grey[300],
-            ),
-          ],
         ],
       ),
     );

@@ -111,6 +111,7 @@ class _OfflineGameScreenState extends State<OfflineGameScreen> {
                           arguments: ChessboardModel(
                               match: MatchModel(
                                 matchId: "offlineGame",
+                                conversationId: "offlineGame",
                                 player1: Player(
                                     user: UserModel(
                                         id: "whitePlayer",
