@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:chess/chess.dart' as chess;
 import 'package:flutter_slchess/core/models/puzzle_model.dart';
 import 'package:flutter_slchess/core/services/puzzle_service.dart';
+import 'package:flutter_slchess/core/constants/app_styles.dart';
 import 'dart:math' as math;
 import 'dart:async';
+import 'package:amplify_flutter/amplify_flutter.dart';
 
 class PuzzleChessboard extends StatefulWidget {
   final Puzzle puzzle;
@@ -19,7 +21,8 @@ class PuzzleChessboard extends StatefulWidget {
   State<PuzzleChessboard> createState() => _PuzzleChessboardState();
 }
 
-class _PuzzleChessboardState extends State<PuzzleChessboard> {
+class _PuzzleChessboardState extends State<PuzzleChessboard>
+    with SingleTickerProviderStateMixin {
   late chess.Chess game;
   late List<List<String?>> board;
   late List<String> solutionMoves;
@@ -32,6 +35,10 @@ class _PuzzleChessboardState extends State<PuzzleChessboard> {
   String? lastMoveTo;
   String? lastHintMoveFrom;
   String? lastHintMoveTo;
+  int? newRating;
+  bool isLoading = false;
+  double boardOpacity = 1.0;
+  double messageOpacity = 0.0;
 
   // Các biến UI
   Set<String> validSquares = {};
@@ -41,13 +48,24 @@ class _PuzzleChessboardState extends State<PuzzleChessboard> {
   bool isWhite = true;
   late ScrollController _scrollController;
   bool isHint = false;
+  late AnimationController _animationController;
+  late Animation<double> _fadeAnimation;
 
   // Service
   final PuzzleService _puzzleService = PuzzleService();
 
+  Timer? _timer;
+  StreamSubscription? _subscription;
+
   @override
   void initState() {
     super.initState();
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 500),
+    );
+    _fadeAnimation =
+        Tween<double>(begin: 0.0, end: 1.0).animate(_animationController);
     _initializePuzzle();
     _scrollController = ScrollController();
 
@@ -55,6 +73,11 @@ class _PuzzleChessboardState extends State<PuzzleChessboard> {
   }
 
   void _initializePuzzle() {
+    setState(() {
+      isLoading = true;
+      boardOpacity = 0.0;
+    });
+
     game = chess.Chess();
 
     // Kiểm tra FEN hợp lệ
@@ -72,6 +95,16 @@ class _PuzzleChessboardState extends State<PuzzleChessboard> {
     board = parseFEN(widget.puzzle.fen);
     isWhite = widget.puzzle.fen.contains(' w ');
     isPlayerTurn = false;
+
+    // Hiệu ứng fade in cho bàn cờ
+    Future.delayed(const Duration(milliseconds: 300), () {
+      if (mounted) {
+        setState(() {
+          boardOpacity = 1.0;
+          isLoading = false;
+        });
+      }
+    });
 
     // Đợi 1 giây rồi thực hiện nước đi đầu tiên của máy
     Timer(const Duration(seconds: 1), () {
@@ -128,14 +161,21 @@ class _PuzzleChessboardState extends State<PuzzleChessboard> {
     if (validMove != null) {
       String moveAlgebraic = validMove.fromAlgebraic + validMove.toAlgebraic;
 
-      if (currentMoveIndex < solutionMoves.length &&
-          moveAlgebraic != solutionMoves[currentMoveIndex]) {
-        setState(() {
-          message = "Nước đi không chính xác!";
-          isPuzzleFailed = true;
-          isPlayerTurn = false;
-        });
-        return;
+      if (currentMoveIndex < solutionMoves.length) {
+        String expectedMove = solutionMoves[currentMoveIndex];
+        String expectedFrom = expectedMove.substring(0, 2);
+        String expectedTo = expectedMove.substring(2, 4);
+
+        // Kiểm tra ô bắt đầu và ô đích
+        if (validMove.fromAlgebraic != expectedFrom ||
+            validMove.toAlgebraic != expectedTo) {
+          setState(() {
+            message = "Nước đi không chính xác!";
+            isPuzzleFailed = true;
+            isPlayerTurn = false;
+          });
+          return;
+        }
       }
 
       // Kiểm tra xem đây có phải là nước đi phong cấp không
@@ -237,9 +277,7 @@ class _PuzzleChessboardState extends State<PuzzleChessboard> {
           return;
         }
 
-        // Thực hiện nước đi
-        game.move(moveString);
-
+        // Lưu lại trạng thái bàn cờ sau khi thực hiện nước đi
         setState(() {
           lastMoveFrom = move.fromAlgebraic;
           lastMoveTo = move.toAlgebraic;
@@ -291,9 +329,10 @@ class _PuzzleChessboardState extends State<PuzzleChessboard> {
 
   void _makeOpponentMove() {
     if (currentMoveIndex < solutionMoves.length) {
-      final move = solutionMoves[currentMoveIndex];
-      final from = move.substring(0, 2);
-      final to = move.substring(2, 4);
+      final moveString = solutionMoves[currentMoveIndex];
+      final from = moveString.substring(0, 2);
+      final to = moveString.substring(2, 4);
+      final promotion = moveString.length > 4 ? moveString.substring(4) : null;
 
       // Tìm nước đi hợp lệ
       chess.Move? validMove;
@@ -305,12 +344,30 @@ class _PuzzleChessboardState extends State<PuzzleChessboard> {
       }
 
       if (validMove != null) {
-        _makeMove(validMove);
+        // Nếu là nước đi phong cấp
+        if (promotion != null) {
+          game.move({
+            'from': from,
+            'to': to,
+            'promotion': promotion,
+          });
 
-        setState(() {
-          currentMoveIndex++;
-          isPlayerTurn = true;
-        });
+          setState(() {
+            lastMoveFrom = from;
+            lastMoveTo = to;
+            board = parseFEN(game.fen);
+            currentMoveIndex++;
+            isPlayerTurn = true;
+          });
+        } else {
+          // Nước đi thông thường
+          _makeMove(validMove);
+
+          setState(() {
+            currentMoveIndex++;
+            isPlayerTurn = true;
+          });
+        }
 
         if (currentMoveIndex >= solutionMoves.length) {
           _onPuzzleSolved();
@@ -319,14 +376,40 @@ class _PuzzleChessboardState extends State<PuzzleChessboard> {
     }
   }
 
-  void _onPuzzleSolved() {
-    setState(() {
-      isPuzzleSolved = true;
-      message = "Puzzle đã được giải thành công!";
-    });
+  Future<void> _onPuzzleSolved() async {
+    try {
+      if (!mounted) return;
 
-    // Gửi thông báo đến server
-    _puzzleService.solvedPuzzle(widget.idToken, widget.puzzle);
+      setState(() {
+        isPuzzleSolved = true;
+        message = "Puzzle đã được giải thành công!";
+      });
+
+      // Gửi thông báo đến server và đợi kết quả
+      final updatedRating =
+          await _puzzleService.solvedPuzzle(widget.idToken, widget.puzzle);
+
+      if (!mounted) return;
+
+      setState(() {
+        newRating = updatedRating;
+      });
+
+      // Đợi một chút để người dùng thấy thông báo thành công
+      await Future.delayed(const Duration(seconds: 1));
+
+      if (!mounted) return;
+
+      // Quay về màn hình trước với kết quả true
+      Navigator.of(context).pop(true);
+    } catch (e) {
+      safePrint('Lỗi khi xử lý giải puzzle: $e');
+      if (!mounted) return;
+
+      setState(() {
+        message = "Có lỗi xảy ra khi cập nhật kết quả!";
+      });
+    }
   }
 
   void _resetPuzzle() {
@@ -348,110 +431,151 @@ class _PuzzleChessboardState extends State<PuzzleChessboard> {
     });
   }
 
+  void _showMessage(String msg, bool isSuccess) {
+    setState(() {
+      message = msg;
+      messageOpacity = 0.0;
+    });
+
+    Future.delayed(const Duration(milliseconds: 100), () {
+      if (mounted) {
+        setState(() {
+          messageOpacity = 1.0;
+        });
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: Text('Puzzle #${widget.puzzle.puzzleId}',
-            style: const TextStyle(color: Colors.white)),
-        backgroundColor: const Color(0xFF0E1416),
+            style: AppStyles.heading4),
+        backgroundColor: AppStyles.primaryColor,
         iconTheme: const IconThemeData(color: Colors.white),
       ),
-      body: Container(
-        decoration: const BoxDecoration(
-          image: DecorationImage(
-            image: AssetImage('assets/bg_dark.png'),
-            fit: BoxFit.cover,
-          ),
-        ),
-        child: Column(
-          children: [
-            // Status bar
-            Container(
-              padding: const EdgeInsets.all(8),
-              color: const Color(0xFF0E1416),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Rating: ${widget.puzzle.rating}',
-                    style: const TextStyle(color: Colors.white),
-                  ),
-                  Text(
-                    isPlayerTurn ? 'Lượt của bạn' : 'Đợi máy...',
-                    style: const TextStyle(color: Colors.white),
-                  ),
-                ],
+      body: Stack(
+        children: [
+          Container(
+            decoration: const BoxDecoration(
+              image: DecorationImage(
+                image: AssetImage('assets/bg_dark.png'),
+                fit: BoxFit.cover,
               ),
             ),
+            child: Column(
+              children: [
+                // Status bar
+                Container(
+                  padding: AppStyles.smallPadding,
+                  color: AppStyles.primaryColor.withOpacity(0.8),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        newRating != null
+                            ? 'Rating: $newRating'
+                            : 'Rating: ${widget.puzzle.rating}',
+                        style: AppStyles.bodyMedium,
+                      ),
+                      Text(
+                        isPlayerTurn ? 'Lượt của bạn' : 'Đợi máy...',
+                        style: AppStyles.bodyMedium,
+                      ),
+                    ],
+                  ),
+                ),
 
-            // Chessboard
-            _buildChessboard(),
+                // Chessboard
+                AnimatedOpacity(
+                  duration: const Duration(milliseconds: 300),
+                  opacity: boardOpacity,
+                  child: _buildChessboard(),
+                ),
 
-            // Message
-            if (message != null)
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(8),
-                color: isPuzzleSolved
-                    ? Colors.green.shade800
-                    : isPuzzleFailed
-                        ? Colors.red.shade800
-                        : const Color(0xFF0E1416),
-                child: Text(
-                  message!,
-                  style: const TextStyle(color: Colors.white, fontSize: 16),
-                  textAlign: TextAlign.center,
+                // Message
+                if (message != null)
+                  Container(
+                    width: double.infinity,
+                    padding: AppStyles.smallPadding,
+                    color: isPuzzleSolved
+                        ? AppStyles.successColor
+                        : isPuzzleFailed
+                            ? AppStyles.errorColor
+                            : AppStyles.primaryColor,
+                    child: Text(
+                      message!,
+                      style: AppStyles.bodyMedium,
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+
+                // Actions
+                Container(
+                  padding: AppStyles.mediumPadding,
+                  color: AppStyles.primaryColor,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      ElevatedButton(
+                        onPressed: _resetPuzzle,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppStyles.warningColor,
+                          foregroundColor: Colors.white,
+                          shape: const RoundedRectangleBorder(
+                            borderRadius: AppStyles.defaultBorderRadius,
+                          ),
+                        ),
+                        child: const Text('Thử lại'),
+                      ),
+                      ElevatedButton(
+                        onPressed: () {
+                          if (isPuzzleSolved) {
+                            Navigator.pop(context, true);
+                          } else {
+                            setState(() {
+                              validSquares = {};
+                              if (!isHint) {
+                                lastHintMoveFrom =
+                                    solutionMoves[currentMoveIndex]
+                                        .substring(0, 2);
+                                isHint = true;
+                              } else if (isHint) {
+                                lastHintMoveTo = solutionMoves[currentMoveIndex]
+                                    .substring(2, 4);
+                                isHint = false;
+                              }
+                            });
+                          }
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: isPuzzleSolved
+                              ? AppStyles.successColor
+                              : AppStyles.infoColor,
+                          foregroundColor: Colors.white,
+                          shape: const RoundedRectangleBorder(
+                            borderRadius: AppStyles.defaultBorderRadius,
+                          ),
+                        ),
+                        child: Text(isPuzzleSolved ? 'Tiếp theo' : 'Gợi ý'),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (isLoading)
+            Container(
+              color: Colors.black.withOpacity(0.5),
+              child: const Center(
+                child: CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                 ),
               ),
-
-            // Actions
-            Container(
-              padding: const EdgeInsets.all(12),
-              color: const Color(0xFF0E1416),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  ElevatedButton(
-                    onPressed: _resetPuzzle,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.orange,
-                      foregroundColor: Colors.white,
-                    ),
-                    child: const Text('Thử lại'),
-                  ),
-                  ElevatedButton(
-                    onPressed: () {
-                      if (isPuzzleSolved) {
-                        Navigator.pop(context, true);
-                      } else {
-                        // Highlight the solution move squares
-                        setState(() {
-                          validSquares = {};
-                          if (!isHint) {
-                            lastHintMoveFrom =
-                                solutionMoves[currentMoveIndex].substring(0, 2);
-                            isHint = true;
-                          } else if (isHint) {
-                            lastHintMoveTo =
-                                solutionMoves[currentMoveIndex].substring(2, 4);
-                            isHint = false;
-                          }
-                        });
-                      }
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor:
-                          isPuzzleSolved ? Colors.green : Colors.blue,
-                      foregroundColor: Colors.white,
-                    ),
-                    child: Text(isPuzzleSolved ? 'Tiếp theo' : 'Gợi ý'),
-                  ),
-                ],
-              ),
             ),
-          ],
-        ),
+        ],
       ),
     );
   }
@@ -709,5 +833,12 @@ class _PuzzleChessboardState extends State<PuzzleChessboard> {
       default:
         return '';
     }
+  }
+
+  @override
+  void dispose() {
+    _animationController.dispose();
+    _timer?.cancel();
+    super.dispose();
   }
 }

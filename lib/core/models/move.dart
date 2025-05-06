@@ -34,3 +34,11 @@ class Move {
     throw UnimplementedError();
   }
 }
+
+//wraper class
+// class MoveWrapper {
+//   final Move move;
+//   final String? comment;
+  
+// }
+

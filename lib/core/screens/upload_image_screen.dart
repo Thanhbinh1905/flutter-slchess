@@ -4,8 +4,6 @@ import 'package:image_picker/image_picker.dart';
 import 'package:flutter_slchess/core/services/amplify_auth_service.dart';
 import 'package:flutter_slchess/core/services/user_service.dart';
 import 'package:flutter_slchess/core/services/image_service.dart';
-import 'dart:math' as math;
-import 'dart:convert';
 
 class UploadImageScreen extends StatefulWidget {
   const UploadImageScreen({super.key});

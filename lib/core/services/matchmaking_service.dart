@@ -13,7 +13,7 @@ import '../models/match_model.dart';
 
 class MatchMakingSerice {
   static final String _localWsGameUrl = WebsocketConstants.game;
-  static final String _wsQueueUrl = WebsocketConstants.queueing;
+  static final String _wsQueueUrl = WebsocketConstants.wsUrl;
   static final String _matchMakingApiUrl = ApiConstants.matchMaking;
 
   static WebSocketChannel startGame(
@@ -99,8 +99,9 @@ class MatchMakingSerice {
           lastMessage = message;
 
           final data = jsonDecode(message);
+
           print("Received WebSocket data: $data");
-          print("isMatch: ${data.containsKey("matchId")}");
+
           if (data.containsKey("matchId")) {
             try {
               MatchModel matchData = await handleQueued(message);

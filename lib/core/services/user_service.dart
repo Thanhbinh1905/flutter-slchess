@@ -4,12 +4,11 @@ import 'package:http/http.dart' as http;
 import '../constants/constants.dart';
 import 'package:hive/hive.dart';
 import 'package:hive_flutter/hive_flutter.dart';
-import 'dart:math' as math;
+import '../services/amplify_auth_service.dart';
 
 class UserService {
   static String getUserApiUrl = ApiConstants.getUserInfo;
-  static String getSelfUserApiUrl = ApiConstants.getSelfUserInfoUrl;
-  static String updateRatingUrl = ApiConstants.getSelfUserInfoUrl;
+  static String updateRatingUrl = ApiConstants.getUserInfo;
 
   static const String USER_BOX = 'userBox';
 
@@ -138,28 +137,20 @@ class UserService {
   // Xử lý token nếu có định dạng JSON
   String _processToken(String token) {
     try {
-      print("Xử lý token, độ dài: ${token.length}");
-
       // Kiểm tra xem token có phải là một đối tượng JSON không
       if (token.trim().startsWith('{') && token.trim().endsWith('}')) {
-        print("Token có định dạng JSON, bắt đầu xử lý");
-
         try {
           // Cố gắng phân tích thành JSON
           final Map<String, dynamic> tokenObj = jsonDecode(token);
 
-          print("Token đã được parse thành JSON: ${tokenObj.keys.join(', ')}");
-
           // Nếu là token của Amplify Cognito
           if (tokenObj.containsKey('jwtToken')) {
-            print("Tìm thấy jwtToken trong token");
             return tokenObj['jwtToken'];
           }
 
           // Nếu là token có claims và header
           if (tokenObj.containsKey('claims') &&
               tokenObj.containsKey('header')) {
-            print("Tìm thấy claims và header trong token");
             // Tạo JWT từ claims và header
             final header =
                 base64Url.encode(utf8.encode(jsonEncode(tokenObj['header'])));
@@ -171,12 +162,9 @@ class UserService {
 
           // Kiểm tra xem token có chứa sub không - đây có thể là token ID
           if (tokenObj.containsKey('sub')) {
-            print("Token dường như là ID token, sử dụng nó trực tiếp");
             // Đây có thể là token ID được parse thành JSON, chúng ta cần chuyển lại thành chuỗi
             return token;
           }
-
-          print("Không tìm thấy định dạng token đã biết trong JSON");
         } catch (e) {
           print("Lỗi khi parse token JSON: $e");
         }
@@ -185,9 +173,6 @@ class UserService {
         print("Token có dạng JWT standard");
         return token;
       }
-
-      // Trả về token gốc nếu không cần xử lý đặc biệt
-      print("Sử dụng token gốc (không xử lý)");
       return token;
     } catch (e) {
       print("Lỗi trong quá trình xử lý token: $e");
@@ -212,38 +197,34 @@ class UserService {
 
   Future<UserModel?> getPlayer() async {
     try {
-      if (!Hive.isBoxOpen(USER_BOX)) {
-        await Hive.openBox<UserModel>(USER_BOX);
+      // Lấy token từ AmplifyAuthService
+      final amplifyAuthService = AmplifyAuthService();
+      final accessToken = await amplifyAuthService.getAccessToken();
+      final idToken = await amplifyAuthService.getIdToken();
+
+      if (accessToken == null || idToken == null) {
+        print("Không tìm thấy token đăng nhập");
+        return null;
       }
 
-      final box = await Hive.openBox<UserModel>(USER_BOX);
-      dynamic rawValue = box.get('currentPlayer');
+      // Lấy thông tin người dùng từ API
+      final response = await http.get(
+        Uri.parse(getUserApiUrl),
+        headers: {'Authorization': 'Bearer $idToken'},
+      );
 
-      // Check if the retrieved object is of the correct type
-      if (rawValue is UserModel) {
-        print("Retrieved user: ${rawValue.username}");
-        return rawValue;
-      } else if (rawValue == null) {
-        print("No user data found in Hive box");
-        return null;
+      if (response.statusCode == 200) {
+        final user = UserModel.fromJson(jsonDecode(response.body));
+        // Lưu vào cache để sử dụng sau này
+        await savePlayer(user);
+        return user;
       } else {
-        print("Wrong type found in Hive box: ${rawValue.runtimeType}");
-        // Clean up the corrupted data
-        await box.delete('currentPlayer');
+        print(
+            "Lỗi khi lấy thông tin người dùng từ API: ${response.statusCode}");
         return null;
       }
     } catch (e) {
-      print("Error retrieving player from Hive: $e");
-      // Cleanup on error
-      try {
-        if (Hive.isBoxOpen(USER_BOX)) {
-          final box = Hive.box<UserModel>(USER_BOX);
-          await box.delete('currentPlayer');
-          await box.close();
-        }
-      } catch (cleanupError) {
-        print("Error during cleanup: $cleanupError");
-      }
+      print("Lỗi khi lấy thông tin người dùng: $e");
       return null;
     }
   }

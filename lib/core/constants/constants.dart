@@ -2,20 +2,18 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class ApiConstants {
   static String identifier = dotenv.env['API_IDENTIFIER'] ?? 'default-api';
-  static String get matchMaking =>
-      "https://$identifier.execute-api.ap-southeast-2.amazonaws.com/dev/matchmaking";
+  static String baseUrl =
+      "https://$identifier.execute-api.ap-southeast-2.amazonaws.com/dev";
+  static String get matchMaking => "$baseUrl/matchmaking";
 
-  static String get getUserInfo =>
-      "https://$identifier.execute-api.ap-southeast-2.amazonaws.com/dev/user";
+  static String get getUserInfo => "$baseUrl/user";
+  static String get getUploadImageUrl => "$baseUrl/avatar/upload";
+  static String get getPulzzesUrl => "$baseUrl/puzzles";
+  static String get getPulzzeUrl => "$baseUrl/puzzle";
+  static String get matchResult => "$baseUrl/matchResults";
 
-  static String get getSelfUserInfoUrl =>
-      "https://slchess-dev.auth.ap-southeast-2.amazoncognito.com/oauth2/userInfo";
-  static String get getUploadImageUrl =>
-      "https://$identifier.execute-api.ap-southeast-2.amazonaws.com/dev/avatar/upload";
-  static String get getPulzzesUrl =>
-      "https://$identifier.execute-api.ap-southeast-2.amazonaws.com/dev/puzzles";
-  static String get getPulzzeUrl =>
-      "https://$identifier.execute-api.ap-southeast-2.amazonaws.com/dev/puzzle";
+  static String getHistoryMatchUrl(String matchId) =>
+      "$baseUrl/match/$matchId/states?limit=1000";
 }
 
 class WebsocketConstants {
@@ -23,7 +21,7 @@ class WebsocketConstants {
       dotenv.env['WEBSOCKET_IDENTIFIER'] ?? 'default-ws';
   static const String serverEndpoint = "localhost:7202";
 
-  static String get queueing =>
+  static String get wsUrl =>
       "wss://$wsIdentifier.execute-api.ap-southeast-2.amazonaws.com/dev";
   static String get game => "ws://$serverEndpoint/game/";
 }

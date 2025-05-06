@@ -110,17 +110,20 @@ class _OfflineGameScreenState extends State<OfflineGameScreen> {
                       Navigator.pushNamed(context, '/board',
                           arguments: ChessboardModel(
                               match: MatchModel(
-                                matchId: "null",
+                                matchId: "offlineGame",
+                                conversationId: "offlineGame",
                                 player1: Player(
                                     user: UserModel(
-                                        id: "null", username: whitePlayerName),
+                                        id: "whitePlayer",
+                                        username: whitePlayerName),
                                     rating: 1200),
                                 player2: Player(
                                     user: UserModel(
-                                        id: "null", username: blackPlayerName),
+                                        id: "blackPlayer",
+                                        username: blackPlayerName),
                                     rating: 1200),
                                 gameMode: selectedTimeControl,
-                                server: "null",
+                                server: "offline",
                                 createdAt: DateTime.now(),
                               ),
                               isOnline: false,

@@ -4,13 +4,22 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:amplify_flutter/amplify_flutter.dart';
 import 'package:amplify_auth_cognito/amplify_auth_cognito.dart';
-import 'package:flutter_slchess/core/config/amplifyconfiguration.dart'
-    as app_config;
 import 'package:flutter_slchess/main.dart';
 import './user_service.dart';
 import './puzzle_service.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+// Enum để quản lý trạng thái đăng nhập
+enum AuthState {
+  initial,
+  loading,
+  authenticated,
+  unauthenticated,
+  error,
+  cancelled
+}
 
 class AmplifyAuthService {
   static final AmplifyAuthService _instance = AmplifyAuthService._internal();
@@ -18,6 +27,20 @@ class AmplifyAuthService {
   final UserService _userService = UserService();
   final PuzzleService _puzzleService = PuzzleService();
   bool _isInitialized = false;
+
+  // Stream controller để quản lý trạng thái đăng nhập
+  final _authStateController = StreamController<AuthState>.broadcast();
+  Stream<AuthState> get authStateStream => _authStateController.stream;
+
+  // Biến để theo dõi số lần retry
+  int _retryCount = 0;
+  static const int maxRetries = 3;
+
+  // Biến để theo dõi URL callback
+  String? _pendingCallbackUrl;
+
+  // Timer để refresh token
+  Timer? _refreshTokenTimer;
 
   // Constants cho secure storage
   static const String ACCESS_TOKEN_KEY = "ACCESS_TOKEN";
@@ -228,62 +251,71 @@ class AmplifyAuthService {
   // Lấy thông tin người dùng sau khi đăng nhập
   Future<void> _fetchAndSaveUserInfo() async {
     try {
+      // Kiểm tra session trước
       final session =
           await Amplify.Auth.fetchAuthSession() as CognitoAuthSession;
 
-      // Kiểm tra trạng thái đăng nhập
-      if (session.isSignedIn) {
-        safePrint("User đã đăng nhập, lấy thông tin token");
-
-        // Lấy token từ Cognito
-        final tokens = session.userPoolTokensResult.value;
-
-        // Lấy token gốc từ đối tượng JWT
-        String? accessTokenStr = tokens.accessToken.raw;
-        String? idTokenStr = tokens.idToken.raw;
-        String? refreshTokenStr = tokens.refreshToken;
-
-        // Lưu token vào secure storage
-        await _storage.write(key: ACCESS_TOKEN_KEY, value: accessTokenStr);
-        await _storage.write(key: ID_TOKEN_KEY, value: idTokenStr);
-        await _storage.write(key: REFRESH_TOKEN_KEY, value: refreshTokenStr);
-
-        safePrint("Đã lưu các token thành công");
-
-        // Debug: in ra một phần của token để kiểm tra
-        safePrint(
-            "Access Token (partial): ${accessTokenStr.substring(0, 20)}...");
-        safePrint("ID Token (partial): ${idTokenStr.substring(0, 20)}...");
-
-        // Xóa bộ nhớ cache câu đố
-        await _puzzleService.clearAllPuzzleCaches();
-
-        // Lưu thông tin người dùng bằng access token
-        await _userService.saveSelfUserInfo(accessTokenStr, idTokenStr);
-      } else {
-        safePrint("Người dùng chưa đăng nhập");
+      if (!session.isSignedIn) {
+        safePrint("Người dùng chưa đăng nhập, chuyển về trang đăng nhập");
+        if (navigatorKey.currentContext != null) {
+          Navigator.pushNamedAndRemoveUntil(
+            navigatorKey.currentContext!,
+            '/login',
+            (route) => false,
+          );
+        }
+        return;
       }
+
+      // Lấy token từ Cognito
+      final tokens = session.userPoolTokensResult.value;
+
+      // Lấy token gốc từ đối tượng JWT
+      String? accessTokenStr = tokens.accessToken.raw;
+      String? idTokenStr = tokens.idToken.raw;
+      String? refreshTokenStr = tokens.refreshToken;
+
+      // Kiểm tra token hết hạn
+      if (await isTokenExpired(accessTokenStr)) {
+        safePrint("Token đã hết hạn, chuyển về trang đăng nhập");
+        if (navigatorKey.currentContext != null) {
+          Navigator.pushNamedAndRemoveUntil(
+            navigatorKey.currentContext!,
+            '/login',
+            (route) => false,
+          );
+        }
+        return;
+      }
+
+      // Lưu token vào secure storage
+      await _storage.write(key: ACCESS_TOKEN_KEY, value: accessTokenStr);
+      await _storage.write(key: ID_TOKEN_KEY, value: idTokenStr);
+      await _storage.write(key: REFRESH_TOKEN_KEY, value: refreshTokenStr);
+
+      safePrint("Đã lưu các token thành công");
+
+      // Debug: in ra một phần của token để kiểm tra
+      safePrint(
+          "Access Token (partial): ${accessTokenStr.substring(0, 20)}...");
+      safePrint("ID Token (partial): ${idTokenStr.substring(0, 20)}...");
+
+      // Lưu thông tin người dùng bằng access token
+      await _userService.saveSelfUserInfo(accessTokenStr, idTokenStr);
+
+      // Sau khi lưu thông tin người dùng thành công, mới xóa cache puzzle
+      await _puzzleService.clearAllPuzzleCaches();
     } catch (e) {
       safePrint("Lỗi khi lấy thông tin người dùng: $e");
-    }
-  }
-
-  // Xử lý chuỗi token nếu nó có định dạng JSON
-  String _processTokenString(String tokenStr) {
-    // Kiểm tra xem token có phải là một đối tượng JSON
-    if (tokenStr.trim().startsWith('{') && tokenStr.trim().endsWith('}')) {
-      safePrint("Token có định dạng JSON, xử lý đặc biệt");
-
-      try {
-        // Nếu là JSON, trả về một token cố định (trong môi trường thực tế, cần xử lý tốt hơn)
-        return "eyJraWQiOiJkRXlGcVFoZUNBQnlOVzlpRWFIdFpKUUM0XC9OZXJrbU9aQUJWYzJpcHdUTT0iLCJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJhOThlMzQxOC1iMDkxLTcwNzMtZGNhYS1mMGQ0ZmFiNGFjMTciLCJpc3MiOiJodHRwczpcL1wvY29nbml0by1pZHAuYXAtc291dGhlYXN0LTIuYW1hem9uYXdzLmNvbVwvYXAtc291dGhlYXN0LTJfYm5rSExrNEl5IiwidmVyc2lvbiI6MiwiY2xpZW50X2lkIjoiYTc0Mmtpa2ludWdydW1oMTgzbWhqYTduZiIsIm9yaWdpbl9qdGkiOiIyYzJjN2FmZC1mODA0LTQxZTEtOGNiOC1mMmZlMGUwYjQ2MzMiLCJ0b2tlbl91c2UiOiJhY2Nlc3MiLCJzY29wZSI6InBob25lIG9wZW5pZCBwcm9maWxlIGVtYWlsIiwiYXV0aF90aW1lIjoxNzQzNzY2OTgwLCJleHAiOjE3NDM4NTMzODAsImlhdCI6MTc0Mzc2Njk4MCwianRpIjoiZGFiMjBjMjYtMmFkNy00YWI4LWIxZjYtZTY0OTVjZjdlYTJmIiwidXNlcm5hbWUiOiJ0ZXN0dXNlcjIifQ";
-      } catch (e) {
-        safePrint("Lỗi khi xử lý token JSON: $e");
+      // Nếu có lỗi, chuyển về trang đăng nhập
+      if (navigatorKey.currentContext != null) {
+        Navigator.pushNamedAndRemoveUntil(
+          navigatorKey.currentContext!,
+          '/login',
+          (route) => false,
+        );
       }
     }
-
-    // Trả về token gốc nếu không có vấn đề
-    return tokenStr;
   }
 
   // Kiểm tra xem token đã hết hạn chưa
@@ -307,10 +339,15 @@ class AmplifyAuthService {
         final expiryDateTime = DateTime.fromMillisecondsSinceEpoch(exp * 1000);
         final currentTime = DateTime.now();
 
+        // Thêm buffer time 5 phút để tránh trường hợp token hết hạn ngay sau khi kiểm tra
+        const bufferTime = Duration(minutes: 5);
+        final expiryWithBuffer = expiryDateTime.subtract(bufferTime);
+
         safePrint('Token hết hạn vào: $expiryDateTime');
         safePrint('Thời gian hiện tại: $currentTime');
+        safePrint('Thời gian hết hạn với buffer: $expiryWithBuffer');
 
-        return currentTime.isAfter(expiryDateTime);
+        return currentTime.isAfter(expiryWithBuffer);
       } else {
         safePrint('Token không có thông tin hết hạn');
         return true; // Coi như token đã hết hạn nếu không có thông tin
@@ -324,51 +361,297 @@ class AmplifyAuthService {
   // Thực hiện đăng nhập với giao diện Amplify
   Future<void> signIn(BuildContext context) async {
     try {
-      await Amplify.Auth.signInWithWebUI();
-      navigateToHome();
-    } catch (e) {
-      String errorMessage = 'Lỗi đăng nhập';
+      // Reset retry count
+      _retryCount = 0;
 
-      if (e.toString().contains('No browser available')) {
-        errorMessage =
-            'Không tìm thấy trình duyệt. Vui lòng cài đặt trình duyệt web (Chrome, Firefox,...) và thử lại.';
+      // Cập nhật trạng thái loading
+      _authStateController.add(AuthState.loading);
+
+      safePrint('Bắt đầu đăng nhập với WebUI');
+
+      // Gọi API để đăng nhập
+      final response = await Amplify.Auth.signInWithWebUI(
+        provider: AuthProvider.cognito,
+        options: const SignInWithWebUIOptions(),
+      );
+
+      safePrint('Kết quả signInWithWebUI: ${response.isSignedIn}');
+
+      if (!response.isSignedIn) {
+        throw Exception('Đăng nhập không thành công');
       }
 
-      if (context.mounted) {
-        showDialog(
-          context: context,
-          builder: (BuildContext context) {
-            return AlertDialog(
-              title: const Text('Lỗi'),
-              content: Text(errorMessage),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Đóng'),
-                ),
-              ],
-            );
-          },
+      safePrint('Đăng nhập thành công, đang lấy session mới');
+
+      // Lấy session mới sau khi đăng nhập
+      final session = await Amplify.Auth.fetchAuthSession();
+      safePrint('Loại session: ${session.runtimeType}');
+
+      if (session is CognitoAuthSession) {
+        final tokens = session.userPoolTokensResult.value;
+
+        safePrint('Kiểm tra token');
+        if (tokens.accessToken.raw.isEmpty ||
+            tokens.idToken.raw.isEmpty ||
+            tokens.refreshToken.isEmpty) {
+          safePrint('Token không hợp lệ');
+          throw Exception('Token không hợp lệ sau khi đăng nhập');
+        }
+
+        safePrint(
+            'Access Token: ${tokens.accessToken.raw.substring(0, 20)}...');
+        safePrint('ID Token: ${tokens.idToken.raw.substring(0, 20)}...');
+
+        safePrint('Bắt đầu lưu token');
+        // Lưu token mới
+        await saveTokens(
+            tokens.accessToken.raw, tokens.idToken.raw, tokens.refreshToken);
+
+        safePrint('Đã lưu token mới thành công');
+
+        safePrint('Bắt đầu lấy thông tin người dùng');
+        // Lấy và lưu thông tin người dùng
+        await _fetchAndSaveUserInfo();
+
+        safePrint('Bắt đầu refresh token timer');
+        // Bắt đầu refresh token timer
+        _startRefreshTokenTimer();
+
+        _authStateController.add(AuthState.authenticated);
+
+        safePrint('Chuyển hướng về màn hình chính');
+        // Chuyển hướng về màn hình chính
+        if (navigatorKey.currentContext != null) {
+          Navigator.pushNamedAndRemoveUntil(
+            navigatorKey.currentContext!,
+            '/home',
+            (route) => false,
+          );
+        }
+      } else {
+        safePrint('Session không phải CognitoAuthSession');
+        throw Exception('Không thể lấy session sau khi đăng nhập');
+      }
+    } catch (e) {
+      safePrint('Lỗi khi đăng nhập: $e');
+      _authStateController.add(AuthState.error);
+
+      // Nếu có lỗi, đăng xuất để làm sạch trạng thái
+      await signOut();
+
+      // Chuyển hướng về màn hình đăng nhập
+      if (navigatorKey.currentContext != null) {
+        Navigator.pushNamedAndRemoveUntil(
+          navigatorKey.currentContext!,
+          '/login',
+          (route) => false,
         );
       }
-      safePrint('Lỗi đăng nhập: $e');
     }
   }
 
+  // Xử lý callback URL từ deep link
+  Future<void> handleCallbackUrl(String url) async {
+    try {
+      _pendingCallbackUrl = url;
+      _authStateController.add(AuthState.loading);
+
+      // Parse URL để lấy authorization code
+      final uri = Uri.parse(url);
+      final code = uri.queryParameters['code'];
+
+      if (code == null) {
+        throw Exception('Không tìm thấy authorization code trong URL');
+      }
+
+      safePrint('Nhận được authorization code: $code');
+
+      // Exchange code lấy token
+      final cognitoUrl = dotenv.env['COGNITO_URL'];
+      final cognitoClientId = dotenv.env['COGNITO_CLIENT_ID'];
+
+      if (cognitoUrl == null || cognitoClientId == null) {
+        throw Exception('Thiếu thông tin cấu hình Cognito');
+      }
+
+      // Gọi API để exchange code
+      final response = await Amplify.Auth.signInWithWebUI(
+        provider: AuthProvider.cognito,
+        options: const SignInWithWebUIOptions(),
+      );
+
+      if (!response.isSignedIn) {
+        throw Exception('Đăng nhập không thành công');
+      }
+
+      print("Đăng nhập thành công");
+
+      // Lấy session mới sau khi đăng nhập
+      final session = await Amplify.Auth.fetchAuthSession();
+      if (session is CognitoAuthSession) {
+        final tokens = session.userPoolTokensResult.value;
+
+        if (tokens.accessToken.raw.isEmpty ||
+            tokens.idToken.raw.isEmpty ||
+            tokens.refreshToken.isEmpty) {
+          throw Exception('Token không hợp lệ sau khi đăng nhập');
+        }
+
+        safePrint(
+            'Access Token: ${tokens.accessToken.raw.substring(0, 20)}...');
+        safePrint('ID Token: ${tokens.idToken.raw.substring(0, 20)}...');
+
+        // Lưu token mới
+        await saveTokens(
+            tokens.accessToken.raw, tokens.idToken.raw, tokens.refreshToken);
+
+        safePrint('Đã lưu token mới thành công');
+
+        // Lấy và lưu thông tin người dùng
+        await _fetchAndSaveUserInfo();
+
+        // Bắt đầu refresh token timer
+        _startRefreshTokenTimer();
+
+        _authStateController.add(AuthState.authenticated);
+        _pendingCallbackUrl = null;
+
+        // Chuyển hướng về màn hình chính
+        if (navigatorKey.currentContext != null) {
+          Navigator.pushNamedAndRemoveUntil(
+            navigatorKey.currentContext!,
+            '/home',
+            (route) => false,
+          );
+        }
+      } else {
+        throw Exception('Không thể lấy session sau khi đăng nhập');
+      }
+    } catch (e) {
+      safePrint('Lỗi khi xử lý callback URL: $e');
+      _authStateController.add(AuthState.error);
+
+      // Nếu có lỗi, đăng xuất để làm sạch trạng thái
+      await signOut();
+
+      // Chuyển hướng về màn hình đăng nhập
+      if (navigatorKey.currentContext != null) {
+        Navigator.pushNamedAndRemoveUntil(
+          navigatorKey.currentContext!,
+          '/login',
+          (route) => false,
+        );
+      }
+    }
+  }
+
+  // Xử lý deep link
+  Future<void> handleDeepLink(Uri uri) async {
+    try {
+      safePrint('Bắt đầu xử lý deep link: $uri');
+      if (uri.scheme == 'slchess') {
+        safePrint('Scheme hợp lệ: slchess');
+        if (uri.host == 'callback') {
+          safePrint('Host là callback, bắt đầu xử lý callback URL');
+          // Xử lý callback URL
+          await handleCallbackUrl(uri.toString());
+        } else if (uri.host == 'signout') {
+          safePrint('Host là signout, bắt đầu đăng xuất');
+          // Xử lý signout URL
+          await signOut();
+        } else if (uri.host == 'cancel') {
+          safePrint('Host là cancel, hủy đăng nhập');
+          // Xử lý khi người dùng hủy đăng nhập
+          _authStateController.add(AuthState.cancelled);
+          if (navigatorKey.currentContext != null) {
+            Navigator.pushNamedAndRemoveUntil(
+              navigatorKey.currentContext!,
+              '/login',
+              (route) => false,
+            );
+          }
+        } else {
+          safePrint('Host không hợp lệ: ${uri.host}');
+        }
+      } else {
+        safePrint('Scheme không hợp lệ: ${uri.scheme}');
+      }
+    } catch (e) {
+      safePrint('Lỗi khi xử lý deep link: $e');
+      _authStateController.add(AuthState.error);
+    }
+  }
+
+  // Bắt đầu timer để refresh token
+  void _startRefreshTokenTimer() {
+    // Hủy timer cũ nếu có
+    _refreshTokenTimer?.cancel();
+
+    // Thiết lập timer mới để refresh token trước khi hết hạn 5 phút
+    _refreshTokenTimer =
+        Timer.periodic(const Duration(minutes: 55), (timer) async {
+      try {
+        await _refreshToken();
+      } catch (e) {
+        safePrint('Lỗi khi refresh token: $e');
+        // Nếu không thể refresh token, đăng xuất người dùng
+        await signOut();
+      }
+    });
+  }
+
+  // Refresh token
+  Future<void> _refreshToken() async {
+    try {
+      final refreshToken = await _storage.read(key: REFRESH_TOKEN_KEY);
+      if (refreshToken == null) {
+        throw Exception('Không tìm thấy refresh token');
+      }
+
+      // Gọi API refresh token
+      final result = await Amplify.Auth.fetchAuthSession();
+      if (result is CognitoAuthSession) {
+        final tokens = result.userPoolTokensResult.value;
+
+        // Lưu token mới
+        await _storage.write(
+            key: ACCESS_TOKEN_KEY, value: tokens.accessToken.raw);
+        await _storage.write(key: ID_TOKEN_KEY, value: tokens.idToken.raw);
+        await _storage.write(
+            key: REFRESH_TOKEN_KEY, value: tokens.refreshToken);
+
+        safePrint('Đã refresh token thành công');
+      }
+    } catch (e) {
+      safePrint('Lỗi khi refresh token: $e');
+      rethrow;
+    }
+  }
+
+  // Cập nhật phương thức signOut để hủy refresh token timer
   Future<void> signOut() async {
     try {
+      // Hủy refresh token timer
+      _refreshTokenTimer?.cancel();
+      _refreshTokenTimer = null;
+
       // Xóa token và thông tin người dùng
       await _storage.delete(key: ACCESS_TOKEN_KEY);
       await _storage.delete(key: ID_TOKEN_KEY);
       await _storage.delete(key: REFRESH_TOKEN_KEY);
       await _userService.clearUserData();
 
-      // Bỏ qua việc gọi Amplify.Auth.signOut() để tránh chuyển hướng web
+      // Đăng xuất mà không chuyển hướng
       await Amplify.Auth.signOut(
-        options: const SignOutOptions(globalSignOut: false),
+        options: const SignOutOptions(
+          globalSignOut: false,
+        ),
       );
 
-      // Chuyển về màn hình đăng nhập
+      // Cập nhật trạng thái
+      _authStateController.add(AuthState.unauthenticated);
+
+      // Chuyển thẳng về màn hình đăng nhập
       if (navigatorKey.currentContext != null) {
         Navigator.pushNamedAndRemoveUntil(
           navigatorKey.currentContext!,
@@ -465,5 +748,19 @@ class AmplifyAuthService {
       safePrint('Lỗi khi chuẩn bị đổi mật khẩu: $e');
       throw Exception('Lỗi khi chuẩn bị đổi mật khẩu: $e');
     }
+  }
+
+  // Phương thức public để lưu token
+  Future<void> saveTokens(
+      String accessToken, String idToken, String refreshToken) async {
+    await _storage.write(key: ACCESS_TOKEN_KEY, value: accessToken);
+    await _storage.write(key: ID_TOKEN_KEY, value: idToken);
+    await _storage.write(key: REFRESH_TOKEN_KEY, value: refreshToken);
+  }
+
+  // Dispose resources
+  void dispose() {
+    _refreshTokenTimer?.cancel();
+    _authStateController.close();
   }
 }

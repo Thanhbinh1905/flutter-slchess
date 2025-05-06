@@ -2,6 +2,7 @@ import 'player.dart';
 
 class MatchModel {
   final String matchId;
+  final String conversationId;
   final Player player1;
   final Player player2;
   final String gameMode;
@@ -10,6 +11,7 @@ class MatchModel {
 
   MatchModel({
     required this.matchId,
+    required this.conversationId,
     required this.player1,
     required this.player2,
     required this.gameMode,
@@ -23,6 +25,7 @@ class MatchModel {
 
     return MatchModel(
       matchId: json['matchId'],
+      conversationId: json['conversationId'],
       player1: player1,
       player2: player2,
       gameMode: json['gameMode'],

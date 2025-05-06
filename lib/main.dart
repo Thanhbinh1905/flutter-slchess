@@ -4,6 +4,7 @@ import 'package:flutter_slchess/core/models/chessboard_model.dart';
 import 'package:flutter_slchess/core/services/amplify_auth_service.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:flutter_slchess/core/models/puzzle_model.dart';
+import 'package:flutter_slchess/core/models/moveset_model.dart';
 import 'package:amplify_flutter/amplify_flutter.dart';
 import 'core/screens/login_screen.dart';
 import 'core/screens/homescreen.dart';
@@ -11,9 +12,12 @@ import 'core/screens/chessboard.dart';
 import 'core/screens/offline_game.dart';
 import 'core/screens/matchmaking.dart';
 import 'core/screens/upload_image_screen.dart';
-import 'core/screens/user_profile_screen.dart';
 import 'core/screens/puzzle_chessboard.dart';
+import 'core/screens/leaderboard_screen.dart';
 import 'core/models/user.dart';
+import 'core/models/matchresults_model.dart';
+import 'core/services/matchresult_service.dart';
+import 'core/screens/profile_settings_screen.dart';
 
 final navigatorKey = GlobalKey<NavigatorState>();
 
@@ -27,8 +31,13 @@ Future<void> main() async {
   Hive.registerAdapter(PuzzleProfileAdapter());
   Hive.registerAdapter(UserModelAdapter());
   Hive.registerAdapter(MembershipAdapter());
+  Hive.registerAdapter(MoveSetAdapter());
+  Hive.registerAdapter(MoveItemAdapter());
+  Hive.registerAdapter(MatchResultsModelAdapter());
+  Hive.registerAdapter(MatchResultItemAdapter());
 
-  // Khởi tạo AmplifyAuthService instance để đảm bảo singleton được tạo sớm
+  // Khởi tạo các service
+  await MatchResultService.init();
   final authService = AmplifyAuthService();
 
   // Khởi tạo Amplify với xử lý lỗi toàn diện
@@ -118,9 +127,12 @@ class MyApp extends StatelessWidget {
                 builder: (context) => const OfflineGameScreen());
           case '/home':
             return MaterialPageRoute(builder: (context) => const HomeScreen());
-          case '/uploadImage':
+          case '/upload_image':
             return MaterialPageRoute(
                 builder: (context) => const UploadImageScreen());
+          case '/user_ratings':
+            return MaterialPageRoute(
+                builder: (context) => const LeaderboardScreen());
           case '/matchmaking':
             final args = settings.arguments;
             if (args is Map) {
@@ -146,7 +158,10 @@ class MyApp extends StatelessWidget {
             }
           case '/profile':
             return MaterialPageRoute(
-                builder: (context) => const UserProfileScreen());
+                builder: (context) => const ProfileSettingsScreen());
+          case '/account_settings':
+            return MaterialPageRoute(
+                builder: (context) => const ProfileSettingsScreen());
           case '/puzzle_board':
             // Kiểm tra null trước khi ép kiểu
             final args = settings.arguments;
@@ -169,6 +184,28 @@ class MyApp extends StatelessWidget {
           default:
             return MaterialPageRoute(builder: (context) => const HomeScreen());
         }
+      },
+      // Thêm xử lý deep link
+      onGenerateInitialRoutes: (String initialRouteName) {
+        return [
+          MaterialPageRoute(
+            builder: (context) => const LoginScreen(),
+            settings: RouteSettings(name: initialRouteName),
+          ),
+        ];
+      },
+      // Thêm xử lý deep link
+      onUnknownRoute: (RouteSettings settings) {
+        // Xử lý deep link
+        if (settings.name?.startsWith('slchess://') ?? false) {
+          final uri = Uri.parse(settings.name!);
+          final authService = AmplifyAuthService();
+          authService.handleDeepLink(uri);
+        }
+        return MaterialPageRoute(
+          builder: (context) => const HomeScreen(),
+          settings: settings,
+        );
       },
     );
   }
