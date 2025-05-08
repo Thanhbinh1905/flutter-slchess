@@ -39,7 +39,7 @@ class _ChessboardState extends State<Chessboard> {
 
   late UserModel currentUser;
 
-  int halfmove = 0;
+  int ply = 0;
   late List<List<String?>> board;
   late String fen;
   bool isWhiteTurn = true;
@@ -98,23 +98,6 @@ class _ChessboardState extends State<Chessboard> {
 
     _initializeUIControls();
     _startClock();
-
-    // Thêm tin nhắn demo nếu đang chơi online
-    if (isOnline) {
-      _addWelcomeMessage();
-    }
-  }
-
-  // Thêm một số tin nhắn demo để minh họa
-  void _addWelcomeMessage() {
-    _chatMessages.add(
-      ChatMessage(
-        sender: "",
-        message: 'Chúc một ván đấu vui vẻ!',
-        time: DateTime.now().subtract(const Duration(minutes: 2)),
-        isCurrentUser: false,
-      ),
-    );
   }
 
   Future<void> _initializeGameState() async {
@@ -161,8 +144,8 @@ class _ChessboardState extends State<Chessboard> {
         lastMoveFrom = moveSet!.moves.last.move.substring(0, 2);
         lastMoveTo = moveSet!.moves.last.move.substring(2, 4);
 
-        // Cập nhật halfmove
-        halfmove = moveSet!.moves.length - 1;
+        // Cập nhật ply
+        ply = moveSet!.moves.length - 1;
 
         // Cập nhật lượt đi
         isWhiteTurn = game.turn.name == "WHITE";
@@ -197,7 +180,7 @@ class _ChessboardState extends State<Chessboard> {
 
     setState(() {
       if (isWhiteTurn) {
-        if (halfmove > 0 || isOnline) {
+        if (ply > 0 || isOnline) {
           whiteTime -= elapsed;
           if (whiteTime <= 0) {
             whiteTime = 0;
@@ -323,8 +306,8 @@ class _ChessboardState extends State<Chessboard> {
           }
         }
 
-        // Cập nhật halfmove
-        halfmove = (moveSet?.moves.length ?? 1) - 1;
+        // Cập nhật ply
+        ply = (moveSet?.moves.length ?? 1) - 1;
       }
 
       // Cập nhật thời gian và lượt đi
@@ -766,15 +749,15 @@ class _ChessboardState extends State<Chessboard> {
   void _moveBackward() {
     if (moveSet != null && moveSet!.moves.length > 1) {
       setState(() {
-        if (halfmove > 0) {
-          halfmove--;
+        if (ply > 0) {
+          ply--;
         }
 
-        fen = moveSet!.moves[halfmove].fen;
-        lastMoveFrom = moveSet!.moves[halfmove].move.substring(0, 2);
-        lastMoveTo = moveSet!.moves[halfmove].move.substring(2, 4);
+        fen = moveSet!.moves[ply].fen;
+        lastMoveFrom = moveSet!.moves[ply].move.substring(0, 2);
+        lastMoveTo = moveSet!.moves[ply].move.substring(2, 4);
         board = parseFEN(fen);
-        scrollToIndex(halfmove);
+        scrollToIndex(ply);
       });
     }
   }
@@ -782,14 +765,14 @@ class _ChessboardState extends State<Chessboard> {
   void _moveForward() {
     if (moveSet != null && moveSet!.moves.length > 1) {
       setState(() {
-        if (halfmove < moveSet!.moves.length - 1) {
-          halfmove++;
+        if (ply < moveSet!.moves.length - 1) {
+          ply++;
         }
-        fen = moveSet!.moves[halfmove].fen;
-        lastMoveFrom = moveSet!.moves[halfmove].move.substring(0, 2);
-        lastMoveTo = moveSet!.moves[halfmove].move.substring(2, 4);
+        fen = moveSet!.moves[ply].fen;
+        lastMoveFrom = moveSet!.moves[ply].move.substring(0, 2);
+        lastMoveTo = moveSet!.moves[ply].move.substring(2, 4);
         board = parseFEN(fen);
-        scrollToIndex(halfmove);
+        scrollToIndex(ply);
       });
     }
   }
@@ -970,7 +953,7 @@ class _ChessboardState extends State<Chessboard> {
       return;
     }
 
-    // if (halfmove != moveSet!.moves.length - 1 || !isOnline) {
+    // if (ply != moveSet!.moves.length - 1 || !isOnline) {
     //   return;
     // }
 
@@ -1083,7 +1066,7 @@ class _ChessboardState extends State<Chessboard> {
           }
 
           _scrollToBottomAfterBuild();
-          halfmove = (moveSet?.moves.length ?? 1) - 1;
+          ply = (moveSet?.moves.length ?? 1) - 1;
 
           // Gửi nước đi đến server nếu đang chơi online
           if (isOnline) {
@@ -1142,7 +1125,7 @@ class _ChessboardState extends State<Chessboard> {
       }
 
       _scrollToBottomAfterBuild();
-      halfmove = (moveSet?.moves.length ?? 1) - 1;
+      ply = (moveSet?.moves.length ?? 1) - 1;
 
       String sanMove = move.fromAlgebraic + move.toAlgebraic;
       // Thêm thông tin phong cấp nếu có
@@ -1252,14 +1235,12 @@ class _ChessboardState extends State<Chessboard> {
             child: InkWell(
                 onTap: () {
                   setState(() {
-                    halfmove = index;
+                    ply = index;
                     // Sử dụng moveSet để cập nhật game state
                     if (moveSet != null && moveSet!.moves.length > index) {
-                      fen = moveSet!.moves[halfmove].fen;
-                      lastMoveFrom =
-                          moveSet!.moves[halfmove].move.substring(0, 2);
-                      lastMoveTo =
-                          moveSet!.moves[halfmove].move.substring(2, 4);
+                      fen = moveSet!.moves[ply].fen;
+                      lastMoveFrom = moveSet!.moves[ply].move.substring(0, 2);
+                      lastMoveTo = moveSet!.moves[ply].move.substring(2, 4);
                       board = parseFEN(fen);
                       // Cập nhật game state
                       game.load(fen);
@@ -1275,7 +1256,7 @@ class _ChessboardState extends State<Chessboard> {
                           ),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 6),
-                            decoration: index == halfmove
+                            decoration: index == ply
                                 ? const BoxDecoration(
                                     color: Colors.white,
                                     borderRadius: BorderRadius.only(
@@ -1289,7 +1270,7 @@ class _ChessboardState extends State<Chessboard> {
                             child: Text(
                               move.toString(),
                               style: TextStyle(
-                                  color: index == halfmove
+                                  color: index == ply
                                       ? Colors.black
                                       : Colors.white),
                             ),
@@ -1300,7 +1281,7 @@ class _ChessboardState extends State<Chessboard> {
                         children: [
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 6),
-                            decoration: index == halfmove
+                            decoration: index == ply
                                 ? const BoxDecoration(
                                     color: Colors.white,
                                     borderRadius: BorderRadius.only(
@@ -1314,7 +1295,7 @@ class _ChessboardState extends State<Chessboard> {
                             child: Text(
                               move.toString(),
                               style: TextStyle(
-                                  color: index == halfmove
+                                  color: index == ply
                                       ? Colors.black
                                       : Colors.white),
                             ),
