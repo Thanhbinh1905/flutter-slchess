@@ -642,11 +642,11 @@ class AmplifyAuthService {
       await _userService.clearUserData();
 
       // Đăng xuất mà không chuyển hướng
-      await Amplify.Auth.signOut(
-        options: const SignOutOptions(
-          globalSignOut: false,
-        ),
-      );
+      // await Amplify.Auth.signOut(
+      //   options: const SignOutOptions(
+      //     globalSignOut: false,
+      //   ),
+      // );
 
       // Cập nhật trạng thái
       _authStateController.add(AuthState.unauthenticated);
