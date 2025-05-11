@@ -40,6 +40,14 @@ class _HomeScreenState extends State<HomeScreen> {
         automaticallyImplyLeading: false, // Ẩn nút quay lại
         actions: [
           IconButton(
+            icon: const Icon(Icons.sports_esports, color: Colors.white),
+            onPressed: () {
+              Navigator.pushNamed(context, '/active_matches');
+            },
+            tooltip: 'Xem trận đấu đang diễn ra',
+            iconSize: 28,
+          ),
+          IconButton(
             icon: const Icon(Icons.account_circle, color: Colors.white),
             onPressed: () {
               Navigator.pushNamed(context, '/profile');

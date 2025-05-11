@@ -39,9 +39,16 @@ class _ChessboardState extends State<Chessboard> {
 
   late UserModel currentUser;
 
+  // WebSocket reconnection variables
+  bool _isReconnecting = false;
+  int _reconnectAttempts = 0;
+  static const int _maxReconnectAttempts = 5;
+  static const Duration _reconnectDelay = Duration(seconds: 3);
+
   int ply = 0;
   late List<List<String?>> board;
   late String fen;
+  bool isGameEnd = false;
   bool isWhiteTurn = true;
   bool isPaused = false;
   String? lastMoveFrom;
@@ -172,7 +179,7 @@ class _ChessboardState extends State<Chessboard> {
   }
 
   void _updateClock(Timer t) {
-    if (!_stopwatch.isRunning) return;
+    if (!_stopwatch.isRunning || isGameEnd) return;
 
     final elapsed = _stopwatch.elapsedMilliseconds;
     _stopwatch.reset();
@@ -180,7 +187,7 @@ class _ChessboardState extends State<Chessboard> {
 
     setState(() {
       if (isWhiteTurn) {
-        if (ply > 0 || isOnline) {
+        if (ply >= 0 || isOnline) {
           whiteTime -= elapsed;
           if (whiteTime <= 0) {
             whiteTime = 0;
@@ -189,11 +196,13 @@ class _ChessboardState extends State<Chessboard> {
           }
         }
       } else {
-        blackTime -= elapsed;
-        if (blackTime <= 0) {
-          blackTime = 0;
-          t.cancel();
-          showGameEndDialog(context, "Black loss", "onTime");
+        if (ply >= 0 || isOnline) {
+          blackTime -= elapsed;
+          if (blackTime <= 0) {
+            blackTime = 0;
+            t.cancel();
+            showGameEndDialog(context, "Black loss", "onTime");
+          }
         }
       }
     });
@@ -219,6 +228,12 @@ class _ChessboardState extends State<Chessboard> {
           onGameState: _handleGameStateUpdate,
           onEndgame: _handleGameEnd,
           onStatusChange: _handleStatusChange,
+          onDisconnect: (closeCode) {
+            // Chỉ thử kết nối lại nếu không phải là close code 1000 (normal closure)
+            if (closeCode != 1000) {
+              _reconnectWebSocket();
+            }
+          },
           context: context,
         );
       } catch (e) {
@@ -270,6 +285,23 @@ class _ChessboardState extends State<Chessboard> {
 
   void _handleGameStateUpdate(GameState gameState) {
     setState(() {
+      print("gameState: ${gameState.toJson()}");
+
+      // Chỉ cập nhật thời gian nếu game đã bắt đầu (ply > 0)
+      if (ply > 0 || isOnline) {
+        // Kiểm tra và chuyển đổi thời gian từ server
+        int whiteClock = gameState.clocks[0];
+        int blackClock = gameState.clocks[1];
+
+        // Nếu thời gian từ server là 0, giữ nguyên thời gian hiện tại
+        if (whiteClock > 0) {
+          whiteTime = whiteClock;
+        }
+        if (blackClock > 0) {
+          blackTime = blackClock;
+        }
+      }
+
       if (moveSet != null) {
         fen = gameState.fen;
 
@@ -310,9 +342,6 @@ class _ChessboardState extends State<Chessboard> {
         ply = (moveSet?.moves.length ?? 1) - 1;
       }
 
-      // Cập nhật thời gian và lượt đi
-      whiteTime = gameState.clocks[0];
-      blackTime = gameState.clocks[1];
       isWhiteTurn = game.turn.name == "WHITE";
     });
   }
@@ -324,12 +353,90 @@ class _ChessboardState extends State<Chessboard> {
         : gameState.outcome == "0-1"
             ? "BLACK"
             : null;
-    showGameEndDialog(context, "$winner WON", gameState.method ?? "Unknown");
+    showGameEndDialog(
+        context,
+        gameState.outcome != "1/2-1/2" ? "$winner WON" : "DRAW",
+        gameState.method ?? "Unknown");
+    setState(() {
+      isGameEnd = true;
+    });
   }
 
   void _handleStatusChange() {
     // Cập nhật UI khi trạng thái người chơi thay đổi
     setState(() {});
+  }
+
+  Future<void> _reconnectWebSocket() async {
+    if (_isReconnecting || _reconnectAttempts >= _maxReconnectAttempts) {
+      return;
+    }
+
+    setState(() {
+      _isReconnecting = true;
+    });
+
+    try {
+      await Future.delayed(_reconnectDelay);
+
+      if (!mounted) return;
+
+      // Thử kết nối lại WebSocket
+      matchService = MatchWebsocketService.startGame(
+          matchModel.matchId, storedIdToken!, server);
+
+      matchService.listen(
+        onGameState: _handleGameStateUpdate,
+        onEndgame: _handleGameEnd,
+        onStatusChange: _handleStatusChange,
+        context: context,
+      );
+
+      setState(() {
+        _isReconnecting = false;
+        _reconnectAttempts = 0;
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Đã kết nối lại thành công!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      print('Lỗi khi kết nối lại WebSocket: $e');
+      setState(() {
+        _isReconnecting = false;
+        _reconnectAttempts++;
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+                'Không thể kết nối lại. Đang thử lại... ($_reconnectAttempts/$_maxReconnectAttempts)'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+
+      // Thử kết nối lại nếu chưa đạt số lần tối đa
+      if (_reconnectAttempts < _maxReconnectAttempts) {
+        _reconnectWebSocket();
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                  'Không thể kết nối lại sau nhiều lần thử. Vui lòng thử lại sau.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    }
   }
 
   void _scrollToBottomAfterBuild() {
