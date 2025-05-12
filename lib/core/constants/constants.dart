@@ -5,6 +5,7 @@ class ApiConstants {
   static String baseUrl =
       "https://$identifier.execute-api.ap-southeast-2.amazonaws.com/dev";
   static String get matchMaking => "$baseUrl/matchmaking";
+  static String get activeMatch => "$baseUrl/active-matches";
 
   static String get getUserInfo => "$baseUrl/user";
   static String get getUploadImageUrl => "$baseUrl/avatar/upload";
