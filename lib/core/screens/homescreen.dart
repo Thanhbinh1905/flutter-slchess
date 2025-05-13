@@ -5,6 +5,7 @@ import 'puzzle_screen.dart';
 import 'leaderboard_screen.dart';
 import 'analysis_screen.dart';
 import 'profile_settings_screen.dart';
+import 'friends_screen.dart';
 // import 'settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -71,7 +72,7 @@ class _HomeScreenState extends State<HomeScreen> {
             PuzzleScreen(),
             AnalysisScreen(),
             LeaderboardScreen(),
-            ProfileSettingsScreen(),
+            FriendsScreen(),
             // SettingsPage(),
           ],
         ),
@@ -113,8 +114,8 @@ class _HomeScreenState extends State<HomeScreen> {
               label: "Xếp hạng",
             ),
             BottomNavigationBarItem(
-              icon: Icon(Icons.settings),
-              label: "Cài đặt",
+              icon: Icon(Icons.people),
+              label: "Bạn bè",
             ),
           ],
         ),

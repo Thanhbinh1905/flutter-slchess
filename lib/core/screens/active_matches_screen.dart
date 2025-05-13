@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../services/spectate_service.dart';
+import '../services/activematch_service.dart';
 import '../models/activematch_model.dart';
 import 'package:amplify_flutter/amplify_flutter.dart';
 import '../services/user_service.dart';

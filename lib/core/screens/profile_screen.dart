@@ -12,14 +12,15 @@ import 'review_chessboard.dart';
 import 'package:amplify_flutter/amplify_flutter.dart';
 import '../widgets/widgets.dart';
 
-class ProfileSettingsScreen extends StatefulWidget {
-  const ProfileSettingsScreen({super.key});
+class ProfileScreen extends StatefulWidget {
+  final UserModel? user;
+  const ProfileScreen({super.key, this.user});
 
   @override
-  State<ProfileSettingsScreen> createState() => _ProfileSettingsScreenState();
+  State<ProfileScreen> createState() => _ProfileScreenState();
 }
 
-class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
+class _ProfileScreenState extends State<ProfileScreen> {
   final AmplifyAuthService _authService = AmplifyAuthService();
   final UserService _userService = UserService();
   final MatchResultService _matchResultService = MatchResultService();
@@ -27,7 +28,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
   UserModel? _user;
   MatchResultsModel? _matchResults;
   bool _isLoading = true;
-  bool _isSaving = false;
+  final bool _isSaving = false;
   String? _error;
 
   final _usernameController = TextEditingController();
@@ -53,46 +54,23 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
     });
 
     try {
-      final user = await _userService.getPlayer();
-
-      if (user == null) {
-        final String? idToken = await _authService.getIdToken();
-        final String? accessToken = await _authService.getAccessToken();
-
-        if (idToken != null && accessToken != null) {
-          await _userService.saveSelfUserInfo(accessToken, idToken);
-          final refreshedUser = await _userService.getPlayer();
-
-          if (!mounted) return;
-          setState(() {
-            _user = refreshedUser;
-            _isLoading = false;
-
-            if (refreshedUser != null) {
-              _usernameController.text = refreshedUser.username;
-              _locateController.text = refreshedUser.locate;
-            }
-          });
-        } else {
-          throw Exception("Không thể lấy token đăng nhập");
-        }
-      } else {
-        if (!mounted) return;
-        setState(() {
-          _user = user;
-          _isLoading = false;
-          _usernameController.text = user.username;
-          _locateController.text = user.locate;
-        });
-      }
+      if (!mounted) return;
+      setState(() {
+        _user = widget.user;
+        _isLoading = false;
+        _usernameController.text = widget.user!.username;
+        _locateController.text = widget.user!.locate;
+      });
 
       // Load match history
       if (_user != null) {
+        print(_user!.id);
         final String? idToken = await _authService.getIdToken();
         if (idToken != null) {
           final results = await _matchResultService.getMatchResults(idToken,
-              userId: _user!.id, isCache: true);
+              userId: _user!.id);
           if (!mounted) return;
+
           setState(() {
             _matchResults = results;
           });
@@ -108,129 +86,6 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
     }
   }
 
-  Future<void> _saveUserData() async {
-    if (_user == null) return;
-
-    setState(() {
-      _isSaving = true;
-      _error = null;
-    });
-
-    try {
-      final String? idToken = await _authService.getIdToken();
-
-      if (idToken == null) {
-        throw Exception("Không thể lấy token xác thực");
-      }
-
-      final updatedUser = UserModel(
-        id: _user!.id,
-        username: _usernameController.text,
-        locate: _locateController.text,
-        picture: _user!.picture,
-        rating: _user!.rating,
-        membership: _user!.membership,
-        createAt: _user!.createAt,
-      );
-
-      await _userService.savePlayer(updatedUser);
-
-      if (!mounted) return;
-      setState(() {
-        _user = updatedUser;
-        _isSaving = false;
-      });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Đã lưu thông tin tài khoản')),
-      );
-    } catch (e) {
-      safePrint("Lỗi khi lưu thông tin người dùng: $e");
-      if (!mounted) return;
-      setState(() {
-        _error = e.toString();
-        _isSaving = false;
-      });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Lỗi: $_error')),
-      );
-    }
-  }
-
-  Future<void> _changePassword() async {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1E2428),
-        title: const Text(
-          'Đổi mật khẩu',
-          style: TextStyle(color: Colors.white),
-        ),
-        content: const Text(
-          'Tính năng đổi mật khẩu sẽ được thêm sau.',
-          style: TextStyle(color: Colors.white70),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Đóng'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _changeAvatar() async {
-    await Navigator.pushNamed(context, '/upload_image');
-    await _loadUserData();
-  }
-
-  void _logout() async {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1E2428),
-        title: const Text(
-          'Đăng xuất',
-          style: TextStyle(color: Colors.white),
-        ),
-        content: const Text(
-          'Bạn có chắc chắn muốn đăng xuất?',
-          style: TextStyle(color: Colors.white70),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Hủy'),
-          ),
-          TextButton(
-            onPressed: () async {
-              Navigator.pop(context);
-              try {
-                await _authService.signOut();
-                if (mounted) {
-                  Navigator.pushNamedAndRemoveUntil(
-                    context,
-                    '/login',
-                    (route) => false,
-                  );
-                }
-              } catch (e) {
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Lỗi khi đăng xuất: $e')),
-                  );
-                }
-              }
-            },
-            child: const Text('Đăng xuất'),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -240,14 +95,6 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
           style: TextStyle(color: Colors.white),
         ),
         backgroundColor: const Color(0xFF0E1416),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: _logout,
-            tooltip: 'Đăng xuất',
-            color: Colors.white,
-          ),
-        ],
       ),
       body: Container(
         decoration: const BoxDecoration(
@@ -287,44 +134,16 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                         Center(
                           child: Column(
                             children: [
-                              GestureDetector(
-                                onTap: _changeAvatar,
-                                child: Stack(
-                                  children: [
-                                    Avatar(
-                                      _user!.picture,
-                                      size: 120,
-                                    ),
-                                    Positioned(
-                                      bottom: 0,
-                                      right: 0,
-                                      child: GestureDetector(
-                                        onTap: _changeAvatar,
-                                        child: Container(
-                                          padding: const EdgeInsets.all(4),
-                                          decoration: BoxDecoration(
-                                            color: Colors.blue,
-                                            shape: BoxShape.circle,
-                                            border: Border.all(
-                                                color: Colors.white, width: 2),
-                                          ),
-                                          child: const Icon(
-                                            Icons.camera_alt,
-                                            color: Colors.white,
-                                            size: 20,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
+                              Avatar(
+                                _user!.picture,
+                                size: 100,
                               ),
-                              // const SizedBox(height: 12),
-                              // if (_isSaving)
-                              //   const Padding(
-                              //     padding: EdgeInsets.only(top: 20),
-                              //     child: CircularProgressIndicator(),
-                              //   ),
+                              const SizedBox(height: 12),
+                              if (_isSaving)
+                                const Padding(
+                                  padding: EdgeInsets.only(top: 20),
+                                  child: CircularProgressIndicator(),
+                                ),
                             ],
                           ),
                         ),
@@ -399,23 +218,6 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                             'Rating', _user!.rating.toStringAsFixed(0)),
                         _buildInfoItem(
                             'Ngày tạo tài khoản', _formatDate(_user!.createAt)),
-
-                        const SizedBox(height: 32),
-
-                        // Bảo mật
-                        _buildSectionHeader('Bảo mật'),
-                        _buildSettingItem(
-                          icon: Icons.lock,
-                          title: 'Đổi mật khẩu',
-                          onTap: _changePassword,
-                        ),
-                        _buildSettingItem(
-                          icon: Icons.security,
-                          title: 'Xác thực hai lớp',
-                          onTap: () {
-                            // Mở màn hình xác thực 2 lớp
-                          },
-                        ),
 
                         const SizedBox(height: 32),
 

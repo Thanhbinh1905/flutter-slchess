@@ -7,6 +7,7 @@ import '../services/user_ratings_service.dart';
 import 'package:amplify_flutter/amplify_flutter.dart';
 import '../constants/app_styles.dart';
 import '../../../main.dart';
+import '../widgets/widgets.dart';
 
 class LeaderboardScreen extends StatefulWidget {
   const LeaderboardScreen({super.key});
@@ -304,6 +305,9 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> with RouteAware {
               child: _buildRankWidget(index + 1),
             ),
             const SizedBox(width: AppStyles.defaultSpacing),
+            // Avatar(
+            //     'https://slchess-dev-avatars.s3.ap-southeast-2.amazonaws.com/${rating.userId}'),
+            // const SizedBox(width: AppStyles.smallSpacing),
             Expanded(
               child: Row(
                 children: [
