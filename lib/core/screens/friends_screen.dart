@@ -24,12 +24,15 @@ class _FriendsScreenState extends State<FriendsScreen> {
   bool _isLoading = true;
   String? _error;
   FriendshipModel? _friendshipList;
+  FriendshipRequestModel? _friendRequests;
   final Map<String, UserModel> _friendUsers = {};
+  final Map<String, UserModel> _requestUsers = {};
 
   @override
   void initState() {
     super.initState();
     _loadFriends();
+    _loadFriendRequests();
   }
 
   Future<void> _loadFriends() async {
@@ -70,6 +73,71 @@ class _FriendsScreenState extends State<FriendsScreen> {
     }
   }
 
+  Future<void> _loadFriendRequests() async {
+    try {
+      final idToken = await _authService.getIdToken();
+      if (idToken == null) {
+        throw Exception('Không thể lấy token xác thực');
+      }
+
+      final requests = await _friendshipService.getFriendshipRequest(idToken);
+
+      // Load thông tin chi tiết của người gửi lời mời
+      for (var request in requests.items) {
+        try {
+          final userInfo =
+              await _userService.getUserInfo(request.senderId, idToken);
+          _requestUsers[request.senderId] = userInfo;
+        } catch (e) {
+          print('Lỗi khi lấy thông tin người dùng ${request.senderId}: $e');
+        }
+      }
+
+      setState(() {
+        _friendRequests = requests;
+      });
+    } catch (e) {
+      print('Lỗi khi tải lời mời kết bạn: $e');
+    }
+  }
+
+  Future<void> _handleFriendRequest(String friendId, bool accept) async {
+    try {
+      final idToken = await _authService.getIdToken();
+      if (idToken == null) {
+        throw Exception('Không thể lấy token xác thực');
+      }
+
+      bool success;
+      if (accept) {
+        success =
+            await _friendshipService.acceptFriendRequest(idToken, friendId);
+      } else {
+        success =
+            await _friendshipService.rejectFriendRequest(idToken, friendId);
+      }
+
+      if (success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(accept
+                ? 'Đã chấp nhận lời mời kết bạn'
+                : 'Đã từ chối lời mời kết bạn'),
+          ),
+        );
+        _loadFriendRequests(); // Tải lại danh sách lời mời
+        _loadFriends(); // Tải lại danh sách bạn bè
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Lỗi: ${e.toString()}'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
   void _showAddFriendDialog() {
     final TextEditingController friendIdController = TextEditingController();
     bool isLoading = false;
@@ -77,98 +145,182 @@ class _FriendsScreenState extends State<FriendsScreen> {
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
-          title: const Text('Thêm bạn'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: friendIdController,
-                decoration: const InputDecoration(
-                  labelText: 'Nhập ID người dùng',
-                  hintText: 'Ví dụ: 123456',
-                ),
-              ),
-              if (isLoading)
-                const Padding(
-                  padding: EdgeInsets.only(top: 16.0),
-                  child: CircularProgressIndicator(),
-                ),
-            ],
+        builder: (context, setState) => Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
           ),
-          actions: [
-            TextButton(
-              onPressed: isLoading
-                  ? null
-                  : () {
-                      Navigator.pop(context);
-                    },
-              child: const Text('Hủy'),
+          elevation: 0,
+          backgroundColor: Colors.transparent,
+          child: Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1E1E1E),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: Colors.white.withOpacity(0.1),
+                width: 1,
+              ),
             ),
-            TextButton(
-              onPressed: isLoading
-                  ? null
-                  : () async {
-                      if (friendIdController.text.trim().isEmpty) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Vui lòng nhập ID người dùng'),
-                          ),
-                        );
-                        return;
-                      }
-
-                      setState(() {
-                        isLoading = true;
-                      });
-
-                      try {
-                        final idToken = await _authService.getIdToken();
-                        if (idToken == null) {
-                          throw Exception('Không thể lấy token xác thực');
-                        }
-
-                        final result = await _friendshipService.addFriend(
-                          idToken,
-                          friendIdController.text.trim(),
-                        );
-
-                        print(result);
-
-                        if (mounted) {
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.withOpacity(0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.person_add,
+                    color: Colors.blue,
+                    size: 32,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                const Text(
+                  'Thêm bạn',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Nhập ID người dùng để gửi lời mời kết bạn',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.grey,
+                    fontSize: 14,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                TextField(
+                  controller: friendIdController,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: InputDecoration(
+                    hintText: 'Nhập ID người dùng',
+                    hintStyle: TextStyle(color: Colors.grey.withOpacity(0.7)),
+                    filled: true,
+                    fillColor: Colors.white.withOpacity(0.05),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                    prefixIcon: const Icon(Icons.person, color: Colors.grey),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 16,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                if (isLoading)
+                  const CircularProgressIndicator(
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.blue),
+                  )
+                else
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      TextButton(
+                        onPressed: () {
                           Navigator.pop(context);
-                          if (result == 200) {
+                        },
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 24,
+                            vertical: 12,
+                          ),
+                        ),
+                        child: const Text(
+                          'Hủy',
+                          style: TextStyle(
+                            color: Colors.grey,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                      ElevatedButton(
+                        onPressed: () async {
+                          if (friendIdController.text.trim().isEmpty) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
-                                content: Text('Đã gửi lời mời kết bạn'),
+                                content: Text('Vui lòng nhập ID người dùng'),
                               ),
                             );
-                          } else if (result == 409) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Không thể tự kết bạn'),
-                              ),
-                            );
+                            return;
                           }
-                          // _loadFriends(); // Tải lại danh sách bạn bè
-                        }
-                      } catch (e) {
-                        if (mounted) {
+
                           setState(() {
-                            isLoading = false;
+                            isLoading = true;
                           });
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(e.toString()),
-                              backgroundColor: Colors.red,
-                            ),
-                          );
-                        }
-                      }
-                    },
-              child: const Text('Gửi lời mời'),
+
+                          try {
+                            final idToken = await _authService.getIdToken();
+                            if (idToken == null) {
+                              throw Exception('Không thể lấy token xác thực');
+                            }
+
+                            final result = await _friendshipService.addFriend(
+                              idToken,
+                              friendIdController.text.trim(),
+                            );
+
+                            if (mounted) {
+                              Navigator.pop(context);
+                              if (result == 200) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Đã gửi lời mời kết bạn'),
+                                  ),
+                                );
+                              } else if (result == 409) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Không thể tự kết bạn'),
+                                  ),
+                                );
+                              }
+                            }
+                          } catch (e) {
+                            if (mounted) {
+                              setState(() {
+                                isLoading = false;
+                              });
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(e.toString()),
+                                  backgroundColor: Colors.red,
+                                ),
+                              );
+                            }
+                          }
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 32,
+                            vertical: 12,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: const Text(
+                          'Gửi lời mời',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -178,6 +330,75 @@ class _FriendsScreenState extends State<FriendsScreen> {
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+
+  Widget _buildFriendRequests() {
+    if (_friendRequests == null || _friendRequests!.items.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Padding(
+          padding: EdgeInsets.all(16.0),
+          child: Text(
+            'Lời mời kết bạn',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+        ListView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: _friendRequests!.items.length,
+          itemBuilder: (context, index) {
+            final request = _friendRequests!.items[index];
+            final userInfo = _requestUsers[request.senderId];
+
+            if (userInfo == null) return const SizedBox.shrink();
+
+            return Container(
+              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: ListTile(
+                leading: Avatar(userInfo.picture),
+                title: Text(
+                  userInfo.username,
+                  style: const TextStyle(color: Colors.white),
+                ),
+                subtitle: Text(
+                  'Rating: ${userInfo.rating.toStringAsFixed(0)}',
+                  style: const TextStyle(color: Colors.grey),
+                ),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.check, color: Colors.green),
+                      onPressed: () =>
+                          _handleFriendRequest(request.senderId, true),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close, color: Colors.red),
+                      onPressed: () =>
+                          _handleFriendRequest(request.senderId, false),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+        const Divider(color: Colors.white24),
+      ],
+    );
   }
 
   @override
@@ -254,74 +475,90 @@ class _FriendsScreenState extends State<FriendsScreen> {
                           ],
                         ),
                       )
-                    : _friendshipList == null || _friendshipList!.items.isEmpty
-                        ? const Center(
-                            child: Text(
-                              'Chưa có bạn bè nào',
-                              style: TextStyle(color: Colors.white),
-                            ),
-                          )
-                        : ListView.builder(
-                            itemCount: _friendshipList!.items.length,
-                            itemBuilder: (context, index) {
-                              final friend = _friendshipList!.items[index];
-                              final userInfo = _friendUsers[friend.friendId];
-                              final userName =
-                                  userInfo?.username ?? 'Đang tải...';
-                              print(userInfo?.toJson());
-
-                              if (_searchQuery.isNotEmpty &&
-                                  !userName
-                                      .toLowerCase()
-                                      .contains(_searchQuery.toLowerCase())) {
-                                return const SizedBox.shrink();
-                              }
-
-                              return Container(
-                                margin: const EdgeInsets.symmetric(
-                                    horizontal: 16, vertical: 8),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(12),
+                    : SingleChildScrollView(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildFriendRequests(),
+                            if (_friendshipList == null ||
+                                _friendshipList!.items.isEmpty)
+                              const Center(
+                                child: Padding(
+                                  padding: EdgeInsets.all(16.0),
+                                  child: Text(
+                                    'Chưa có bạn bè nào',
+                                    style: TextStyle(color: Colors.white),
+                                  ),
                                 ),
-                                child: ListTile(
-                                  leading: Avatar(userInfo!.picture),
-                                  title: Text(
-                                    userName,
-                                    style: const TextStyle(color: Colors.white),
-                                  ),
-                                  subtitle: Text(
-                                    'Rating: ${userInfo.rating.toStringAsFixed(0) ?? '...'}',
-                                    style: const TextStyle(color: Colors.grey),
-                                  ),
-                                  trailing: IconButton(
-                                    icon: const Icon(Icons.message,
-                                        color: Colors.white),
-                                    onPressed: () {
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (context) => ChatScreen(
-                                              friend: userInfo,
-                                              conversationId:
-                                                  friend.conversationId),
-                                        ),
-                                      );
-                                    },
-                                  ),
-                                  onTap: () {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (context) =>
-                                            ProfileScreen(user: userInfo),
+                              )
+                            else
+                              ListView.builder(
+                                shrinkWrap: true,
+                                physics: const NeverScrollableScrollPhysics(),
+                                itemCount: _friendshipList!.items.length,
+                                itemBuilder: (context, index) {
+                                  final friend = _friendshipList!.items[index];
+                                  final userInfo =
+                                      _friendUsers[friend.friendId];
+                                  final userName =
+                                      userInfo?.username ?? 'Đang tải...';
+
+                                  if (_searchQuery.isNotEmpty &&
+                                      !userName.toLowerCase().contains(
+                                          _searchQuery.toLowerCase())) {
+                                    return const SizedBox.shrink();
+                                  }
+
+                                  return Container(
+                                    margin: const EdgeInsets.symmetric(
+                                        horizontal: 16, vertical: 8),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: ListTile(
+                                      leading: Avatar(userInfo!.picture),
+                                      title: Text(
+                                        userName,
+                                        style: const TextStyle(
+                                            color: Colors.white),
                                       ),
-                                    );
-                                  },
-                                ),
-                              );
-                            },
-                          ),
+                                      subtitle: Text(
+                                        'Rating: ${userInfo.rating.toStringAsFixed(0) ?? '...'}',
+                                        style:
+                                            const TextStyle(color: Colors.grey),
+                                      ),
+                                      trailing: IconButton(
+                                        icon: const Icon(Icons.message,
+                                            color: Colors.white),
+                                        onPressed: () {
+                                          Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (context) => ChatScreen(
+                                                  friend: userInfo,
+                                                  conversationId:
+                                                      friend.conversationId),
+                                            ),
+                                          );
+                                        },
+                                      ),
+                                      onTap: () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (context) =>
+                                                ProfileScreen(user: userInfo),
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  );
+                                },
+                              ),
+                          ],
+                        ),
+                      ),
           ),
         ],
       ),

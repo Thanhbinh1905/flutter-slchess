@@ -63,4 +63,17 @@ class FriendshipService {
       return false;
     }
   }
+
+  Future<FriendshipRequestModel> getFriendshipRequest(
+      String userIdToken) async {
+    final response = await http.get(
+      Uri.parse('${ApiConstants.baseUrl}/friendRequests/received'),
+      headers: {'Authorization': 'Bearer $userIdToken'},
+    );
+    if (response.statusCode == 200) {
+      return FriendshipRequestModel.fromJson(json.decode(response.body));
+    } else {
+      throw Exception('Failed to load friendship request');
+    }
+  }
 }

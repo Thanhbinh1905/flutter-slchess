@@ -55,3 +55,57 @@ class FriendshipItem {
     };
   }
 }
+
+class FriendshipRequestModel {
+  final List<FriendshipRequestItem> items;
+  final String? nextPageToken;
+
+  FriendshipRequestModel({
+    required this.items,
+    this.nextPageToken,
+  });
+
+  factory FriendshipRequestModel.fromJson(Map<String, dynamic> json) {
+    return FriendshipRequestModel(
+      items: (json['items'] as List<dynamic>)
+          .map((item) => FriendshipRequestItem.fromJson(item))
+          .toList(),
+      nextPageToken: json['nextPageToken'] as String?,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'items': items.map((item) => item.toJson()).toList(),
+      'nextPageToken': nextPageToken,
+    };
+  }
+}
+
+class FriendshipRequestItem {
+  final String senderId;
+  final String receiverId;
+  final DateTime createdAt;
+
+  FriendshipRequestItem({
+    required this.senderId,
+    required this.receiverId,
+    required this.createdAt,
+  });
+
+  factory FriendshipRequestItem.fromJson(Map<String, dynamic> json) {
+    return FriendshipRequestItem(
+      senderId: json['senderId'] as String,
+      receiverId: json['receiverId'] as String,
+      createdAt: DateTime.parse(json['createdAt'] as String),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'senderId': senderId,
+      'receiverId': receiverId,
+      'createdAt': createdAt.toIso8601String(),
+    };
+  }
+}

@@ -103,23 +103,58 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFF1E1E1E),
       appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
         title: Row(
           children: [
             Avatar(widget.friend.picture),
-            const SizedBox(width: 8),
-            Text(widget.friend.username),
+            const SizedBox(width: 12),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  widget.friend.username,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                Text(
+                  'Rating: ${widget.friend.rating.toStringAsFixed(0)}',
+                  style: TextStyle(
+                    color: Colors.grey[400],
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
           ],
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.more_vert, color: Colors.white),
+            onPressed: () {
+              // TODO: Show more options
+            },
+          ),
+        ],
       ),
       body: _isConnecting
           ? const Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  CircularProgressIndicator(),
+                  CircularProgressIndicator(
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.blue),
+                  ),
                   SizedBox(height: 16),
-                  Text('Đang kết nối...'),
+                  Text(
+                    'Đang kết nối...',
+                    style: TextStyle(color: Colors.white),
+                  ),
                 ],
               ),
             )
@@ -127,35 +162,47 @@ class _ChatScreenState extends State<ChatScreen> {
               children: [
                 if (!_isChatConnected)
                   Container(
-                    color: Colors.red,
-                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    color: Colors.red.withOpacity(0.8),
+                    padding: const EdgeInsets.symmetric(vertical: 8),
                     child: const Center(
                       child: Text(
                         'Mất kết nối',
-                        style: TextStyle(color: Colors.white),
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                   ),
                 Expanded(
-                  child: ListView.builder(
-                    controller: _chatScrollController,
-                    reverse: true,
-                    padding: const EdgeInsets.all(16),
-                    itemCount: _chatMessages.length,
-                    itemBuilder: (context, index) {
-                      final message =
-                          _chatMessages[_chatMessages.length - 1 - index];
-                      return _buildMessageBubble(message);
-                    },
+                  child: Container(
+                    decoration: BoxDecoration(
+                      image: const DecorationImage(
+                        image: AssetImage('assets/bg_dark.png'),
+                        fit: BoxFit.cover,
+                      ),
+                      color: Colors.black.withOpacity(0.3),
+                    ),
+                    child: ListView.builder(
+                      controller: _chatScrollController,
+                      reverse: true,
+                      padding: const EdgeInsets.all(16),
+                      itemCount: _chatMessages.length,
+                      itemBuilder: (context, index) {
+                        final message =
+                            _chatMessages[_chatMessages.length - 1 - index];
+                        return _buildMessageBubble(message);
+                      },
+                    ),
                   ),
                 ),
                 Container(
-                  padding: const EdgeInsets.all(8),
+                  padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: const Color(0xFF1E1E1E),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.grey.withOpacity(0.2),
+                        color: Colors.black.withOpacity(0.2),
                         spreadRadius: 1,
                         blurRadius: 3,
                         offset: const Offset(0, -1),
@@ -165,23 +212,42 @@ class _ChatScreenState extends State<ChatScreen> {
                   child: Row(
                     children: [
                       IconButton(
-                        icon: const Icon(Icons.attach_file),
+                        icon: const Icon(Icons.attach_file, color: Colors.grey),
                         onPressed: () {
                           // TODO: Implement file attachment
                         },
                       ),
                       Expanded(
-                        child: TextField(
-                          controller: _messageController,
-                          decoration: const InputDecoration(
-                            hintText: 'Nhập tin nhắn...',
-                            border: InputBorder.none,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.05),
+                            borderRadius: BorderRadius.circular(24),
+                          ),
+                          child: TextField(
+                            controller: _messageController,
+                            style: const TextStyle(color: Colors.white),
+                            decoration: InputDecoration(
+                              hintText: 'Nhập tin nhắn...',
+                              hintStyle: TextStyle(color: Colors.grey[400]),
+                              border: InputBorder.none,
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 20,
+                                vertical: 10,
+                              ),
+                            ),
                           ),
                         ),
                       ),
-                      IconButton(
-                        icon: const Icon(Icons.send),
-                        onPressed: _sendMessage,
+                      const SizedBox(width: 8),
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.blue,
+                          borderRadius: BorderRadius.circular(24),
+                        ),
+                        child: IconButton(
+                          icon: const Icon(Icons.send, color: Colors.white),
+                          onPressed: _sendMessage,
+                        ),
                       ),
                     ],
                   ),
@@ -252,42 +318,88 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Widget _buildMessageBubble(ChatMessage message) {
-    return Align(
-      alignment:
-          message.isCurrentUser ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 4),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        decoration: BoxDecoration(
-          color: message.isCurrentUser ? Colors.blue : Colors.grey[300],
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (!message.isCurrentUser)
-              Text(
-                message.sender,
-                style: TextStyle(
-                  color: message.isCurrentUser ? Colors.white : Colors.black54,
-                  fontSize: 12,
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: message.isCurrentUser
+            ? MainAxisAlignment.end
+            : MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          if (!message.isCurrentUser) ...[
+            Avatar(
+              message.sender == currentUser.username
+                  ? currentUser.picture
+                  : widget.friend.picture,
+              size: 32,
+            ),
+            const SizedBox(width: 8),
+          ],
+          Flexible(
+            child: Container(
+              constraints: BoxConstraints(
+                maxWidth: MediaQuery.of(context).size.width * 0.7,
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              decoration: BoxDecoration(
+                color: message.isCurrentUser
+                    ? Colors.blue
+                    : Colors.white.withOpacity(0.1),
+                borderRadius: BorderRadius.only(
+                  topLeft: const Radius.circular(20),
+                  topRight: const Radius.circular(20),
+                  bottomLeft: Radius.circular(message.isCurrentUser ? 20 : 4),
+                  bottomRight: Radius.circular(message.isCurrentUser ? 4 : 20),
                 ),
               ),
-            Text(
-              message.message,
-              style: TextStyle(
-                color: message.isCurrentUser ? Colors.white : Colors.black,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (!message.isCurrentUser)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Text(
+                        message.sender,
+                        style: TextStyle(
+                          color: message.isCurrentUser
+                              ? Colors.white
+                              : Colors.blue[300],
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  Text(
+                    message.message,
+                    style: TextStyle(
+                      color:
+                          message.isCurrentUser ? Colors.white : Colors.white,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    _formatTime(message.time),
+                    style: TextStyle(
+                      color: message.isCurrentUser
+                          ? Colors.white.withOpacity(0.7)
+                          : Colors.grey[400],
+                      fontSize: 10,
+                    ),
+                  ),
+                ],
               ),
             ),
-            Text(
-              _formatTime(message.time),
-              style: TextStyle(
-                color: message.isCurrentUser ? Colors.white70 : Colors.black54,
-                fontSize: 10,
-              ),
+          ),
+          if (message.isCurrentUser) ...[
+            const SizedBox(width: 8),
+            Avatar(
+              message.sender == currentUser.username
+                  ? currentUser.picture
+                  : widget.friend.picture,
+              size: 32,
             ),
           ],
-        ),
+        ],
       ),
     );
   }
