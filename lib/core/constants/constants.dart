@@ -13,7 +13,8 @@ class ApiConstants {
   static String get getPulzzeUrl => "$baseUrl/puzzle";
   static String get matchResult => "$baseUrl/matchResults";
 
-  static String get friendUrl => "$baseUrl/friends";
+  static String get getFriendUrl => "$baseUrl/friends";
+  static String get friendUrl => "$baseUrl/friend";
 
   static String getHistoryMatchUrl(String matchId) =>
       "$baseUrl/match/$matchId/states?limit=1000";

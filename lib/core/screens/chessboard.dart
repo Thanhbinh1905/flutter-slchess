@@ -1625,10 +1625,6 @@ class _ChessboardState extends State<Chessboard> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
-                    _buildButton(context, "Tái đấu", () {
-                      Navigator.of(context).pop();
-                      Navigator.of(context).pop();
-                    }),
                     _buildButton(context, "Ván cờ mới", () {
                       Navigator.of(context).pop();
                       Navigator.of(context).pop();

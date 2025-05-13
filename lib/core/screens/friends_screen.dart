@@ -70,6 +70,110 @@ class _FriendsScreenState extends State<FriendsScreen> {
     }
   }
 
+  void _showAddFriendDialog() {
+    final TextEditingController friendIdController = TextEditingController();
+    bool isLoading = false;
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('Thêm bạn'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: friendIdController,
+                decoration: const InputDecoration(
+                  labelText: 'Nhập ID người dùng',
+                  hintText: 'Ví dụ: 123456',
+                ),
+              ),
+              if (isLoading)
+                const Padding(
+                  padding: EdgeInsets.only(top: 16.0),
+                  child: CircularProgressIndicator(),
+                ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: isLoading
+                  ? null
+                  : () {
+                      Navigator.pop(context);
+                    },
+              child: const Text('Hủy'),
+            ),
+            TextButton(
+              onPressed: isLoading
+                  ? null
+                  : () async {
+                      if (friendIdController.text.trim().isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Vui lòng nhập ID người dùng'),
+                          ),
+                        );
+                        return;
+                      }
+
+                      setState(() {
+                        isLoading = true;
+                      });
+
+                      try {
+                        final idToken = await _authService.getIdToken();
+                        if (idToken == null) {
+                          throw Exception('Không thể lấy token xác thực');
+                        }
+
+                        final result = await _friendshipService.addFriend(
+                          idToken,
+                          friendIdController.text.trim(),
+                        );
+
+                        print(result);
+
+                        if (mounted) {
+                          Navigator.pop(context);
+                          if (result == 200) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Đã gửi lời mời kết bạn'),
+                              ),
+                            );
+                          } else if (result == 409) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Không thể tự kết bạn'),
+                              ),
+                            );
+                          }
+                          // _loadFriends(); // Tải lại danh sách bạn bè
+                        }
+                      } catch (e) {
+                        if (mounted) {
+                          setState(() {
+                            isLoading = false;
+                          });
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(e.toString()),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
+                      }
+                    },
+              child: const Text('Gửi lời mời'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   void dispose() {
     _searchController.dispose();
@@ -121,9 +225,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
                 child: IconButton(
                   icon: const Icon(Icons.person_add, color: Colors.white),
                   iconSize: 24,
-                  onPressed: () {
-                    // TODO: Implement add friend functionality
-                  },
+                  onPressed: _showAddFriendDialog,
                   tooltip: 'Thêm bạn',
                 ),
               ),

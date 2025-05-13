@@ -1,4 +1,4 @@
-package com.example.flutter_slchess
+package com.slchess.app
 
 import io.flutter.embedding.android.FlutterActivity
 
