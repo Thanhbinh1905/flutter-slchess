@@ -7,7 +7,9 @@ enum Membership {
   @HiveField(0)
   guest,
   @HiveField(1)
-  premium
+  premium,
+  @HiveField(2)
+  pro
 }
 
 @HiveType(typeId: 3)

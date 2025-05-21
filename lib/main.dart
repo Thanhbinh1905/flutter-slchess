@@ -25,8 +25,8 @@ final routeObserver = RouteObserver<PageRoute>();
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await dotenv.load(fileName: ".env");
 
+  await dotenv.load(fileName: ".env");
   // Khởi tạo Hive và đăng ký adapter
   await Hive.initFlutter();
   Hive.registerAdapter(PuzzleAdapter());

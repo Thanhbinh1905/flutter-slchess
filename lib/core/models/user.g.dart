@@ -69,6 +69,8 @@ class MembershipAdapter extends TypeAdapter<Membership> {
         return Membership.guest;
       case 1:
         return Membership.premium;
+      case 2:
+        return Membership.pro;
       default:
         return Membership.guest;
     }
@@ -82,6 +84,9 @@ class MembershipAdapter extends TypeAdapter<Membership> {
         break;
       case Membership.premium:
         writer.writeByte(1);
+        break;
+      case Membership.pro:
+        writer.writeByte(2);
         break;
     }
   }

@@ -43,7 +43,8 @@ dependencies:
   encrypted_shared_preferences: ^3.0.1
   image_picker: ^1.1.2
   jwt_decoder: ^2.0.1
-  
+  flutter_zalopay_sdk: ^0.1.14
+
   # AWS Amplify packages
   amplify_flutter: ^2.6.1
   amplify_auth_cognito: ^2.6.1
