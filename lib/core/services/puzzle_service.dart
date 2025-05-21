@@ -311,7 +311,8 @@ class PuzzleService {
       final puzzleProfile = await getPuzzleRatingFromCacheOrAPI(idToken);
 
       // Nếu user là premium, luôn cho phép chơi
-      if (user.membership == Membership.premium) {
+      if (user.membership == Membership.premium ||
+          user.membership == Membership.pro) {
         return true;
       }
 

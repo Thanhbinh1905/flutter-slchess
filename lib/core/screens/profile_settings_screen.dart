@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_zalopay_sdk/flutter_zalopay_sdk.dart';
 import '../services/amplify_auth_service.dart';
 import '../services/user_service.dart';
 import '../services/moveset_service.dart';
 import '../services/matchresult_service.dart';
+import '../services/payment_service.dart';
 import '../models/user.dart';
 import '../models/historymatch_model.dart';
 import '../models/matchresults_model.dart';
@@ -231,6 +233,66 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
     );
   }
 
+  // Thêm hàm xử lý thanh toán
+  Future<void> _handlePayment() async {
+    try {
+      setState(() {
+        _isLoading = true;
+      });
+
+      // Tạo đơn hàng ZaloPay
+      final response = await ZaloPayService.createOrder(
+        appUser: _user?.id ?? 'user123',
+        amount: 100000, // Số tiền thanh toán (100,000 VND)
+        description: 'Nâng cấp tài khoản SLChess',
+      );
+
+      if (response['return_code'] == 1) {
+        print("response: $response");
+        // Lấy token thanh toán
+        final String zpTransToken = response['zp_trans_token'];
+
+        // Gọi SDK ZaloPay để mở app thanh toán
+        final result = await ZaloPayService.payWithZaloPay(zpTransToken);
+
+        // Xử lý kết quả thanh toán
+        switch (result) {
+          case FlutterZaloPayStatus.success:
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Thanh toán thành công!')),
+            );
+            // TODO: Cập nhật trạng thái tài khoản người dùng
+            break;
+          case FlutterZaloPayStatus.cancelled:
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Thanh toán bị hủy')),
+            );
+            break;
+          case FlutterZaloPayStatus.failed:
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Thanh toán thất bại')),
+            );
+            break;
+          default:
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                  content: Text('Có lỗi xảy ra trong quá trình thanh toán')),
+            );
+        }
+      } else {
+        throw Exception(response['return_message']);
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Lỗi thanh toán: $e')),
+      );
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -398,6 +460,13 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                         _buildInfoItem(
                             'Rating', _user!.rating.toStringAsFixed(0)),
                         _buildInfoItem(
+                            'Membership',
+                            _user!.membership == Membership.premium
+                                ? 'Premium'
+                                : _user!.membership == Membership.pro
+                                    ? 'Pro'
+                                    : 'Free'),
+                        _buildInfoItem(
                             'Ngày tạo tài khoản', _formatDate(_user!.createAt)),
 
                         const SizedBox(height: 32),
@@ -415,6 +484,16 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                           onTap: () {
                             // Mở màn hình xác thực 2 lớp
                           },
+                        ),
+
+                        const SizedBox(height: 32),
+
+                        // Thêm phần thanh toán
+                        _buildSectionHeader('Nâng cấp tài khoản'),
+                        _buildSettingItem(
+                          icon: Icons.payment,
+                          title: 'Nâng cấp Premium',
+                          onTap: _handlePayment,
                         ),
 
                         const SizedBox(height: 32),

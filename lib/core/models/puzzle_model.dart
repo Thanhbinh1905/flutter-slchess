@@ -55,7 +55,8 @@ class PuzzleProfile {
 
   int getRemainingPuzzles(UserModel user) {
     resetDailyCount();
-    if (user.membership == Membership.premium) {
+    if (user.membership == Membership.premium ||
+        user.membership == Membership.pro) {
       return -1; // -1 nghĩa là không giới hạn
     }
     return 3 - dailyPuzzleCount;
@@ -63,7 +64,8 @@ class PuzzleProfile {
 
   bool canPlayPuzzle(UserModel user) {
     resetDailyCount();
-    if (user.membership == Membership.premium) {
+    if (user.membership == Membership.premium ||
+        user.membership == Membership.pro) {
       return true;
     }
     return dailyPuzzleCount < 3;
