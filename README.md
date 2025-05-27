@@ -37,9 +37,6 @@ flutter pub get
 ```
 
 3. Create a `.env` file in the root directory with your configuration:
-```
-# Add your environment variables here
-```
 
 4. Run the app:
 ```bash
